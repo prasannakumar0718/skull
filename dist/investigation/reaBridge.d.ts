@@ -55,5 +55,32 @@ export declare class ReaInvestigationBridge {
      */
     private executeFixtureAnalysis;
     setProviderForTesting(provider?: InvestigationProvider): void;
+    /**
+     * Returns list of upstream REA tools supported by the REA contract.
+     */
+    listSupportedReaTools(): Array<{
+        name: string;
+        description: string;
+        inputSchema: Record<string, unknown>;
+    }>;
+    /**
+     * Executes a native REA command with full argument pass-through.
+     */
+    executeReaCliCommand(args: string[]): {
+        success: boolean;
+        exitCode: number;
+        stdout: string;
+        stderr: string;
+        notes?: string;
+    };
+    /**
+     * Delegates invocation of a native REA MCP tool.
+     */
+    callReaNativeTool(toolName: string, toolArgs: Record<string, unknown>): Promise<{
+        isError: boolean;
+        data?: any;
+        error?: string;
+        remediation?: string;
+    }>;
     private findFiles;
 }

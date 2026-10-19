@@ -209,6 +209,147 @@ export class ReaInvestigationBridge {
     setProviderForTesting(provider) {
         this.customProvider = provider;
     }
+    /**
+     * Returns list of upstream REA tools supported by the REA contract.
+     */
+    listSupportedReaTools() {
+        return [
+            {
+                name: "inspect_artifact",
+                description: "Examine binary layout, section headers, exported symbols, web bundle manifests, and structure.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        artifactPath: { type: "string", description: "Absolute path to target file or binary" }
+                    },
+                    required: ["artifactPath"]
+                }
+            },
+            {
+                name: "analyze_function",
+                description: "Decompile function, generate pseudo-code, disassembly, CFG, and caller/callee graphs.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        artifactPath: { type: "string" },
+                        functionIdentifier: { type: "string" }
+                    },
+                    required: ["artifactPath", "functionIdentifier"]
+                }
+            },
+            {
+                name: "compare_artifacts",
+                description: "Compare structure, signatures, and symbol graphs between two reference artifacts.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        artifactPathA: { type: "string" },
+                        artifactPathB: { type: "string" }
+                    },
+                    required: ["artifactPathA", "artifactPathB"]
+                }
+            },
+            {
+                name: "get_call_graph",
+                description: "Extract complete static call graph across functions with relationship coverage.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        artifactPath: { type: "string" },
+                        depth: { type: "number", default: 2 }
+                    },
+                    required: ["artifactPath"]
+                }
+            },
+            {
+                name: "get_evidence_bundle",
+                description: "Retrieve comprehensive retained session evidence bundle for cross-agent transfer.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        bundleId: { type: "string" }
+                    }
+                }
+            }
+        ];
+    }
+    /**
+     * Executes a native REA command with full argument pass-through.
+     */
+    executeReaCliCommand(args) {
+        const reaStatus = this.probeReaStatus();
+        if (!reaStatus.cliFound && !reaStatus.mcpFound) {
+            return {
+                success: false,
+                exitCode: 1,
+                stdout: "",
+                stderr: `REA CLI is not installed in PATH, and the repository at '${this.reaRootPath || "../rea"}' is unbuilt.`,
+                notes: reaStatus.details
+            };
+        }
+        try {
+            const cmd = reaStatus.cliFound ? "rea" : `node "${path.join(this.reaRootPath, "scripts", "rea.mjs")}"`;
+            const fullCmd = `${cmd} ${args.map((a) => (a.includes(" ") ? `"${a}"` : a)).join(" ")}`;
+            const stdout = execSync(fullCmd, { encoding: "utf-8", timeout: 30000 });
+            return {
+                success: true,
+                exitCode: 0,
+                stdout: stdout.trim(),
+                stderr: ""
+            };
+        }
+        catch (err) {
+            return {
+                success: false,
+                exitCode: err.status || 1,
+                stdout: (err.stdout || "").toString().trim(),
+                stderr: (err.stderr || err.message || "").toString().trim()
+            };
+        }
+    }
+    /**
+     * Delegates invocation of a native REA MCP tool.
+     */
+    async callReaNativeTool(toolName, toolArgs) {
+        const reaStatus = this.probeReaStatus();
+        // If test fixture mode is set
+        if (this.customProvider === "test-fixture") {
+            return {
+                isError: false,
+                data: {
+                    tool: toolName,
+                    status: "simulated_fixture",
+                    evidence_id: "ev_test_12345",
+                    normalized_result: { observed: true, toolName, args: toolArgs }
+                }
+            };
+        }
+        if (!reaStatus.cliFound && !reaStatus.mcpFound) {
+            return {
+                isError: true,
+                error: `Native REA capability '${toolName}' is unavailable in the current environment.`,
+                remediation: reaStatus.details
+            };
+        }
+        // Call REA CLI tool execution pass-through
+        try {
+            const output = execSync(`rea call ${toolName} '${JSON.stringify(toolArgs)}' --json`, {
+                encoding: "utf-8",
+                timeout: 30000
+            });
+            return {
+                isError: false,
+                data: JSON.parse(output)
+            };
+        }
+        catch (err) {
+            return {
+                isError: true,
+                error: err.stderr || err.message,
+                remediation: "Check REA logs or target binary compatibility."
+            };
+        }
+    }
     findFiles(dir, extensions) {
         const results = [];
         try {

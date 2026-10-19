@@ -64,6 +64,30 @@ export function createForgeMcpServer(reaPath) {
                 },
                 required: ["projectDirectory"]
             }
+        },
+        {
+            name: "forge_rea_tool",
+            description: "Delegate invocation directly to a native REA MCP tool (e.g., inspect_artifact, analyze_function, compare_artifacts, get_call_graph).",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    toolName: { type: "string", description: "Name of the REA tool to invoke" },
+                    toolArguments: { type: "object", description: "Arguments payload matching the REA tool schema" }
+                },
+                required: ["toolName", "toolArguments"]
+            }
+        },
+        {
+            name: "forge_wasp_cli",
+            description: "Delegate a native Wasp CLI command (e.g., compile, clean, version) directly to Wasp.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    command: { type: "string", description: "Wasp command, e.g., 'version', 'clean', 'compile'" },
+                    projectDirectory: { type: "string", description: "Path to Wasp project directory" }
+                },
+                required: ["command"]
+            }
         }
     ];
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -150,6 +174,69 @@ export function createForgeMcpServer(reaPath) {
                 return {
                     content: [{ type: "text", text: JSON.stringify(report, null, 2) }]
                 };
+            }
+            if (name === "forge_rea_tool") {
+                if (!args || typeof args.toolName !== "string" || !args.toolArguments || typeof args.toolArguments !== "object") {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'toolName' string and 'toolArguments' object are required." }]
+                    };
+                }
+                const reaResult = await investigationBridge.callReaNativeTool(args.toolName, args.toolArguments);
+                return {
+                    isError: reaResult.isError,
+                    content: [{ type: "text", text: JSON.stringify(reaResult, null, 2) }]
+                };
+            }
+            if (name === "forge_wasp_cli") {
+                if (!args || typeof args.command !== "string" || !args.command.trim()) {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'command' string is required." }]
+                    };
+                }
+                const { checkSystemPrerequisites } = await import("../utils/prerequisites.js");
+                const prereqs = checkSystemPrerequisites();
+                if (!prereqs.wasp.installed) {
+                    return {
+                        isError: true,
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    status: "unavailable",
+                                    error: "Native Wasp CLI is not installed in the system PATH.",
+                                    notes: prereqs.wasp.notes,
+                                    wslAvailable: prereqs.wasp.wslAvailable,
+                                    remediation: "Install Wasp CLI inside WSL or Linux via: curl -sSL https://get.wasp.sh | sh"
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+                const projectDir = args.projectDirectory ? path.resolve(String(args.projectDirectory)) : process.cwd();
+                try {
+                    const { execSync } = await import("node:child_process");
+                    const out = execSync(`wasp ${args.command}`, { cwd: projectDir, encoding: "utf-8", timeout: 30000 });
+                    return {
+                        content: [{ type: "text", text: JSON.stringify({ success: true, stdout: out.trim() }, null, 2) }]
+                    };
+                }
+                catch (err) {
+                    return {
+                        isError: true,
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    success: false,
+                                    exitCode: err.status || 1,
+                                    stderr: (err.stderr || err.message || "").trim()
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
             }
             return {
                 isError: true,

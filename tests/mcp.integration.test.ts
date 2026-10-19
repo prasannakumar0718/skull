@@ -51,6 +51,8 @@ describe("Agent App Forge - Real MCP Protocol Integration Suite", () => {
     expect(toolNames).toContain("forge_create_spec");
     expect(toolNames).toContain("forge_generate_app");
     expect(toolNames).toContain("forge_verify_app");
+    expect(toolNames).toContain("forge_rea_tool");
+    expect(toolNames).toContain("forge_wasp_cli");
 
     for (const tool of response.tools) {
       expect(tool.description).toBeTruthy();
@@ -187,10 +189,55 @@ describe("Agent App Forge - Real MCP Protocol Integration Suite", () => {
     try {
       await stdioClient.connect(stdioTransport);
       const toolList = await stdioClient.listTools();
-      expect(toolList.tools.length).toBe(4);
+      expect(toolList.tools.length).toBe(6);
       expect(toolList.tools.some((t) => t.name === "forge_create_spec")).toBe(true);
+      expect(toolList.tools.some((t) => t.name === "forge_rea_tool")).toBe(true);
+      expect(toolList.tools.some((t) => t.name === "forge_wasp_cli")).toBe(true);
     } finally {
       await stdioClient.close();
+    }
+  });
+
+  it("invokes forge_rea_tool and returns structured diagnostic or result", async () => {
+    const result = await client.callTool({
+      name: "forge_rea_tool",
+      arguments: {
+        toolName: "inspect_artifact",
+        toolArguments: { artifactPath: path.resolve(".") }
+      }
+    });
+
+    expect(result.content).toBeDefined();
+    const content = result.content[0] as { type: string; text: string };
+    const parsed = JSON.parse(content.text);
+    // Since REA is unbuilt on this machine, it returns structured diagnostic
+    expect(parsed).toBeDefined();
+    if (result.isError) {
+      expect(parsed.error).toContain("inspect_artifact");
+      expect(parsed.remediation).toBeDefined();
+    } else {
+      expect(parsed.data).toBeDefined();
+    }
+  });
+
+  it("invokes forge_wasp_cli and handles platform status truthfully", async () => {
+    const result = await client.callTool({
+      name: "forge_wasp_cli",
+      arguments: {
+        command: "version"
+      }
+    });
+
+    expect(result.content).toBeDefined();
+    const content = result.content[0] as { type: string; text: string };
+    const parsed = JSON.parse(content.text);
+    expect(parsed).toBeDefined();
+    // On native Windows without Wasp in PATH, returns truthful platform diagnostic
+    if (result.isError) {
+      expect(parsed.status).toBe("unavailable");
+      expect(parsed.remediation).toContain("WSL");
+    } else {
+      expect(parsed.success).toBe(true);
     }
   });
 });

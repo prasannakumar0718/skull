@@ -123,5 +123,68 @@ export function createCli(): Command {
       console.log(JSON.stringify(result, null, 2));
     });
 
+  program
+    .command("wasp")
+    .description("Delegate commands directly to native Wasp CLI with full argument pass-through")
+    .allowUnknownOption(true)
+    .argument("[args...]", "Raw arguments to pass to Wasp CLI")
+    .action(async (args = []) => {
+      const { checkSystemPrerequisites } = await import("../utils/prerequisites.js");
+      const prereqs = checkSystemPrerequisites();
+
+      if (!prereqs.wasp.installed) {
+        console.error("\n[Agent App Forge — Native Wasp Delegation]");
+        console.error("Wasp CLI is not installed or not in system PATH.");
+        console.error(`Status: ${prereqs.wasp.notes}`);
+        console.error("\nTo install Wasp:");
+        console.error("- Linux/macOS/WSL: curl -sSL https://get.wasp.sh | sh");
+        console.error("- To generate a Wasp project without executing Wasp CLI locally: forge create <prompt> --engine wasp");
+        console.error("- For native Windows execution without WSL: forge create <prompt> --engine fullstack-node\n");
+        process.exit(1);
+      }
+
+      const { spawnSync } = await import("node:child_process");
+      const result = spawnSync("wasp", args, { stdio: "inherit" });
+      process.exit(result.status || 0);
+    });
+
+  program
+    .command("rea")
+    .description("Delegate commands directly to native REA CLI with full argument pass-through")
+    .allowUnknownOption(true)
+    .argument("[args...]", "Raw arguments to pass to REA CLI")
+    .action(async (args = []) => {
+      const bridge = new ReaInvestigationBridge();
+      const result = bridge.executeReaCliCommand(args);
+
+      if (!result.success) {
+        console.error("\n[Agent App Forge — Native REA Delegation]");
+        console.error(result.stderr);
+        if (result.notes) console.error(`Notes: ${result.notes}`);
+        console.error("\nTo build REA:");
+        console.error(`  cd "${path.resolve("../rea")}" && npm install && npm run build`);
+        console.error("\nFallback: Use 'forge inspect <path>' for native heuristic source parsing.\n");
+        process.exit(result.exitCode);
+      }
+
+      console.log(result.stdout);
+    });
+
+  program
+    .command("doctor")
+    .description("Check system runtime prerequisites for Node.js, SQLite, Wasp, and REA")
+    .action(async () => {
+      const { checkSystemPrerequisites } = await import("../utils/prerequisites.js");
+      const prereqs = checkSystemPrerequisites();
+      console.log("\n=== Agent App Forge System Health & Prerequisites ===\n");
+      console.log(`Node.js Runtime : v${prereqs.node.version} (Major: ${prereqs.node.major}) — ${prereqs.node.isSupported ? "Supported" : "Unsupported"}`);
+      console.log(`SQLite Engine   : Built-in node:sqlite is ${prereqs.node.sqliteAvailable ? "Available" : "Unavailable"}`);
+      console.log(`Wasp CLI        : ${prereqs.wasp.installed ? `Installed (${prereqs.wasp.path})` : "Not installed on host PATH"}`);
+      console.log(`Wasp Notes      : ${prereqs.wasp.notes}`);
+      console.log(`REA CLI         : ${prereqs.rea.installed ? `Installed (${prereqs.rea.path})` : "Not installed on host PATH"}`);
+      console.log(`REA Repo State  : ${prereqs.rea.repoDetected ? (prereqs.rea.built ? "Detected & Built" : "Detected but unbuilt (node_modules missing)") : "Not detected"}`);
+      console.log(`REA Notes       : ${prereqs.rea.notes}\n`);
+    });
+
   return program;
 }

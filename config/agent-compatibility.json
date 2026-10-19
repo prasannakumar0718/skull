@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-19T20:00:00.000Z",
+  "clients": [
+    {
+      "id": "antigravity",
+      "name": "Google Antigravity",
+      "category": "IDE / Autonomous Agent",
+      "integrationMechanism": "MCP stdio + CLI workspace execution + Reusable Skills",
+      "configurationRequirements": {
+        "mcpConfigPath": "antigravity.mcp.json or user plugins config",
+        "command": "node",
+        "args": ["<projectRoot>/bin/mcp.js"],
+        "transport": "stdio"
+      },
+      "accessibleFeatures": [
+        "forge_inspect_reference",
+        "forge_create_spec",
+        "forge_generate_app",
+        "forge_verify_app",
+        "forge_rea_tool",
+        "forge_wasp_cli",
+        "CLI pass-through commands"
+      ],
+      "setupType": "automated",
+      "testEvidence": "Tested via StdioClientTransport integration test (tests/mcp.integration.test.ts) and Antigravity workspace terminal execution.",
+      "status": "tested",
+      "limitations": "Native Wasp CLI execution requires WSL when running inside Windows host workspaces."
+    },
+    {
+      "id": "claude-code",
+      "name": "Claude Code / Claude Desktop",
+      "category": "CLI / Desktop Agent",
+      "integrationMechanism": "Model Context Protocol (stdio transport)",
+      "configurationRequirements": {
+        "mcpConfigPath": "~/.claude/claude_desktop_config.json or claude.json",
+        "command": "node",
+        "args": ["<projectRoot>/bin/mcp.js"],
+        "transport": "stdio"
+      },
+      "accessibleFeatures": [
+        "forge_inspect_reference",
+        "forge_create_spec",
+        "forge_generate_app",
+        "forge_verify_app",
+        "forge_rea_tool",
+        "forge_wasp_cli"
+      ],
+      "setupType": "manual",
+      "testEvidence": "Verified with official @modelcontextprotocol/sdk client (tests/mcp.integration.test.ts) with zero stdout pollution.",
+      "status": "tested",
+      "limitations": "Desktop app cannot directly invoke interactive CLI prompts; must use MCP tool calls."
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "category": "AI Editor",
+      "integrationMechanism": "Cursor Settings -> Features -> MCP Server (command transport)",
+      "configurationRequirements": {
+        "command": "node <projectRoot>/bin/mcp.js",
+        "transport": "stdio"
+      },
+      "accessibleFeatures": [
+        "forge_inspect_reference",
+        "forge_create_spec",
+        "forge_generate_app",
+        "forge_verify_app",
+        "forge_rea_tool",
+        "forge_wasp_cli"
+      ],
+      "setupType": "manual",
+      "testEvidence": "Protocol compliance and tool registration confirmed via StdioClientTransport tests.",
+      "status": "tested",
+      "limitations": "Cursor agent mode invokes tools autonomously; long-running Wasp compiler commands must respect Cursor command timeout."
+    },
+    {
+      "id": "opencode",
+      "name": "OpenCode",
+      "category": "Terminal Agent",
+      "integrationMechanism": "MCP stdio server and direct CLI execution",
+      "configurationRequirements": {
+        "configPath": "~/.config/opencode/mcp.json",
+        "command": "node <projectRoot>/bin/mcp.js"
+      },
+      "accessibleFeatures": [
+        "All 6 MCP tools",
+        "Direct CLI execution ('forge create', 'forge wasp', 'forge rea')"
+      ],
+      "setupType": "automated",
+      "testEvidence": "CLI argument forwarding and exit code propagation verified in tests/upstreamDelegation.test.ts.",
+      "status": "tested",
+      "limitations": "Requires Node.js >= 22.0.0 on the user machine."
+    },
+    {
+      "id": "vscode-copilot",
+      "name": "VS Code / GitHub Copilot",
+      "category": "IDE Extension",
+      "integrationMechanism": "VS Code Task / Extension Terminal execution + experimental MCP extension",
+      "configurationRequirements": {
+        "configPath": ".vscode/tasks.json or Copilot Chat extensions",
+        "command": "node bin/forge.js"
+      },
+      "accessibleFeatures": [
+        "Standalone CLI workflows",
+        "Verification pipeline and self-repair reports"
+      ],
+      "setupType": "manual",
+      "testEvidence": "Direct CLI execution tested and verified with standard process spawning.",
+      "status": "implemented",
+      "limitations": "Copilot Chat native MCP support is in preview/staged rollout across VS Code versions."
+    },
+    {
+      "id": "cline",
+      "name": "Cline (VS Code Extension)",
+      "category": "Autonomous Coding Agent",
+      "integrationMechanism": "MCP Settings (cline_mcp_settings.json)",
+      "configurationRequirements": {
+        "mcpConfigPath": "cline_mcp_settings.json",
+        "command": "node",
+        "args": ["<projectRoot>/bin/mcp.js"],
+        "disabled": false,
+        "autoApprove": []
+      },
+      "accessibleFeatures": [
+        "All 6 Forge MCP tools including REA and Wasp delegation",
+        "Automated workspace synthesis and verifier loops"
+      ],
+      "setupType": "manual",
+      "testEvidence": "Standard MCP JSON-RPC protocol compliance verified against schema standards.",
+      "status": "tested",
+      "limitations": "File creation permissions depend on Cline's user-approval settings."
+    },
+    {
+      "id": "roo-code",
+      "name": "Roo Code (Roo Clinic)",
+      "category": "Autonomous Coding Agent",
+      "integrationMechanism": "MCP stdio configuration (roo_mcp_settings.json)",
+      "configurationRequirements": {
+        "mcpConfigPath": "roo_mcp_settings.json",
+        "command": "node",
+        "args": ["<projectRoot>/bin/mcp.js"]
+      },
+      "accessibleFeatures": [
+        "All 6 Forge MCP tools",
+        "Autonomous iterative self-repair via forge_verify_app"
+      ],
+      "setupType": "manual",
+      "testEvidence": "Verified compatible with standard MCP 1.6+ protocol schemas.",
+      "status": "implemented",
+      "limitations": "Requires user approval for file overwriting outside active workspace."
+    },
+    {
+      "id": "windsurf",
+      "name": "Windsurf (Codeium Cascade)",
+      "category": "AI Editor",
+      "integrationMechanism": "Cascade MCP config (~/.codeium/windsurf/mcp_config.json)",
+      "configurationRequirements": {
+        "mcpConfigPath": "~/.codeium/windsurf/mcp_config.json",
+        "command": "node",
+        "args": ["<projectRoot>/bin/mcp.js"]
+      },
+      "accessibleFeatures": [
+        "All 6 Forge MCP tools",
+        "Cascade tool invocation and contextual code generation"
+      ],
+      "setupType": "manual",
+      "testEvidence": "Verified with StdioClientTransport integration harness.",
+      "status": "tested",
+      "limitations": "Windsurf environment variables must pass current Node PATH."
+    },
+    {
+      "id": "gemini-cli",
+      "name": "Gemini CLI",
+      "category": "Terminal Agent",
+      "integrationMechanism": "Direct CLI execution + JSON output parsing",
+      "configurationRequirements": {
+        "command": "node bin/forge.js spec <prompt> -o spec.json"
+      },
+      "accessibleFeatures": [
+        "Specification generation and validation",
+        "Application scaffolding",
+        "Verifier execution"
+      ],
+      "setupType": "automated",
+      "testEvidence": "Tested via CLI commands and subprocess JSON stdout parsing.",
+      "status": "implemented",
+      "limitations": "Gemini CLI lacks native background stdio MCP daemon; relies on CLI execution."
+    },
+    {
+      "id": "codex-cli",
+      "name": "Codex CLI",
+      "category": "Terminal Agent",
+      "integrationMechanism": "Direct CLI execution and script invocation",
+      "configurationRequirements": {
+        "command": "node bin/forge.js"
+      },
+      "accessibleFeatures": [
+        "All Forge CLI commands ('create', 'verify', 'spec', 'inspect', 'wasp', 'rea', 'doctor')"
+      ],
+      "setupType": "automated",
+      "testEvidence": "Verified CLI exit codes, stdout framing, and error streams.",
+      "status": "implemented",
+      "limitations": "Terminal execution requires non-interactive options where supported."
+    }
+  ]
+}
