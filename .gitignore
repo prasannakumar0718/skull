@@ -6,4 +6,5 @@ dist/
 *.sqlite
 temp_*
 outputs/
+*.tgz
 

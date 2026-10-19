@@ -14,7 +14,6 @@
     "bin",
     "config",
     "templates",
-    "src/investigation/reaCatalog.json",
     "README.md",
     "LICENSE"
   ],
