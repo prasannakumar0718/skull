@@ -1,4 +1,4 @@
-# AI Coding Agent Compatibility Guide (Phase 12 Audit)
+# AI Coding Agent Compatibility Guide (Phase 13 Audit)
 
 ## Status Definitions
 
@@ -16,8 +16,8 @@ In accordance with strict verification rules, all 10 clients are categorized int
 
 | Client | Category | Status | Verification Evidence / Reason for Status |
 |---|---|---|---|
-| **Google Antigravity** | IDE / Autonomous Agent | **`verified`** | Active live IDE pair programming session. Successfully executed Forge CLI commands, probed prerequisites, connected MCP transports, and passed all 56 automated tests. |
-| **Claude Code** | Terminal CLI | **`tested`** | Binary found at `C:\Users\PRASANNA KUMAR\AppData\Roaming\npm\claude`. Standard stdio MCP protocol transport verified with zero stdout pollution via official SDK. |
+| **Google Antigravity** | IDE / Autonomous Agent | **`verified`** | Active live IDE pair programming session. Successfully executed Forge CLI commands (`forge create`, `forge recreate`, `doctor`), probed prerequisites, connected MCP transports with 214 tools, and passed all 73 automated tests. |
+| **Claude Code** | Terminal CLI | **`tested`** | Binary found at `C:\Users\PRASANNA KUMAR\AppData\Roaming\npm\claude`. Standard stdio MCP protocol transport verified with zero stdout pollution via official SDK. Exposes `forge_recreate_app`. |
 | **OpenCode** | Terminal CLI | **`tested`** | Binary found at `C:\Users\PRASANNA KUMAR\AppData\Roaming\npm\opencode`. CLI command pass-through and exit code propagation verified in test suites. |
 | **VS Code / GitHub Copilot** | IDE Extension | **`limited`** | VS Code binary found at `Microsoft VS Code\bin\code`. CLI tasks automated; Copilot Chat native MCP support is in preview/staged rollout across versions. |
 | **Codex CLI** | Terminal CLI | **`tested`** | Binary found at `C:\Users\PRASANNA KUMAR\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe`. Non-interactive CLI commands and error code propagation verified. |

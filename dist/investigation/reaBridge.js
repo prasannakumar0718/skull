@@ -20,6 +20,12 @@ export class ReaInvestigationBridge {
         if (reaPath && fs.existsSync(reaPath)) {
             this.reaRootPath = path.resolve(reaPath);
         }
+        else {
+            const siblingRea = path.resolve(process.cwd(), "..", "rea");
+            if (fs.existsSync(siblingRea)) {
+                this.reaRootPath = siblingRea;
+            }
+        }
     }
     /**
      * Probes whether REA is genuinely installed and runnable in the host environment.

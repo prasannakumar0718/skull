@@ -6,6 +6,7 @@ import { EngineOrchestrator } from "../engines/orchestrator.js";
 import { ForgeVerifier } from "../verifier/verifier.js";
 import { ReaInvestigationBridge } from "../investigation/reaBridge.js";
 import { runForgeMcpServer } from "../mcp/server.js";
+import { RecreationOrchestrator } from "../recreation/orchestrator.js";
 
 export function createCli(): Command {
   const program = new Command();
@@ -79,6 +80,68 @@ export function createCli(): Command {
       console.log(`Next steps: ${result.entryPointInstructions}`);
       if (result.platformNotes) {
         console.log(`Note: ${result.platformNotes}`);
+      }
+    });
+
+  program
+    .command("recreate")
+    .description("Investigate reference software, build evidence-based spec, plan, generate, verify, and compare")
+    .argument("<prompt>", "Natural language recreation request or description")
+    .option("-t, --target <path>", "Path to authorized reference target (directory, SQLite DB, binary fixture)")
+    .option("-o, --output <dir>", "Target directory for recreated application", "./recreated-app")
+    .option("-e, --engine <engine>", "Target engine ('wasp' or 'fullstack-node')", "auto")
+    .option("--plan-only", "Generate investigation and implementation plan without writing project files", false)
+    .option("--no-compare", "Skip behavioral comparison against reference")
+    .option("--json", "Output machine-readable JSON", false)
+    .action(async (prompt, options) => {
+      console.log(`Initiating software recreation for: "${prompt}"...`);
+      if (options.target) {
+        console.log(`Reference Target: ${options.target}`);
+      }
+      console.log(`Target Engine: ${options.engine}`);
+      console.log(`Output Directory: ${options.output}`);
+
+      const orchestrator = new RecreationOrchestrator();
+      const result = await orchestrator.recreate({
+        prompt,
+        targetPath: options.target,
+        outputDirectory: options.output,
+        targetEngine: options.engine,
+        planOnly: options.planOnly,
+        compare: options.compare
+      });
+
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log("\n=== RECREATION REPORT ===");
+      console.log(`Mode: [${result.mode}]`);
+      console.log(`Summary: ${result.summary}`);
+      console.log(`Title: ${result.spec.title}`);
+      console.log(`Engine: ${result.plan.selectedEngine} (${result.plan.engineRationale})`);
+      console.log(`Observed Capabilities: ${result.investigation.observedCapabilities.join(", ") || "None (feature-driven)"}`);
+
+      if (result.investigation.unknowns.length > 0) {
+        console.log("\nIdentified Unknowns / Limitations:");
+        for (const u of result.investigation.unknowns) {
+          console.log(`  - ${u}`);
+        }
+      }
+
+      if (result.comparison) {
+        console.log("\n--- Behavioral Comparison Results ---");
+        for (const ev of result.comparison.evaluations) {
+          const mark = ev.status === "pass" ? "✓" : (ev.status === "fail" ? "✗" : "~");
+          console.log(`${mark} [${ev.status.toUpperCase()}] ${ev.feature}`);
+          if (ev.evidence) console.log(`   Evidence: ${ev.evidence}`);
+        }
+      }
+
+      console.log(`\nOverall Result: ${result.success ? "PASSED" : "FAILED"}`);
+      if (!result.success && !options.planOnly) {
+        process.exit(1);
       }
     });
 

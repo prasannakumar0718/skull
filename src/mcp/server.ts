@@ -98,6 +98,22 @@ export function createForgeMcpServer(reaPath?: string): Server {
         },
         required: ["command"]
       }
+    },
+    {
+      name: "forge_recreate_app",
+      description: "Investigate reference software using REA, plan architecture, generate full-stack application, and compare observable behavior.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Recreation prompt or feature description" },
+          targetPath: { type: "string", description: "Path to reference software directory, SQLite DB, or binary fixture" },
+          outputDirectory: { type: "string", description: "Target directory where recreation will be generated" },
+          targetEngine: { type: "string", enum: ["auto", "wasp", "fullstack-node"], default: "auto" },
+          planOnly: { type: "boolean", description: "Only produce investigation and implementation plan without writing files", default: false },
+          compare: { type: "boolean", description: "Run behavioral comparison against reference after build", default: true }
+        },
+        required: ["prompt", "outputDirectory"]
+      }
     }
   ];
 
@@ -216,6 +232,29 @@ export function createForgeMcpServer(reaPath?: string): Server {
         const report = await verifier.verify(projDir);
         return {
           content: [{ type: "text", text: JSON.stringify(report, null, 2) }]
+        };
+      }
+
+      if (name === "forge_recreate_app") {
+        if (!args || typeof args.prompt !== "string" || !args.prompt.trim() || typeof args.outputDirectory !== "string" || !args.outputDirectory.trim()) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "Invalid arguments: 'prompt' and 'outputDirectory' string parameters are required." }]
+          };
+        }
+        const { RecreationOrchestrator } = await import("../recreation/orchestrator.js");
+        const recOrchestrator = new RecreationOrchestrator();
+        const recResult = await recOrchestrator.recreate({
+          prompt: args.prompt.trim(),
+          targetPath: typeof args.targetPath === "string" ? args.targetPath.trim() : undefined,
+          outputDirectory: args.outputDirectory.trim(),
+          targetEngine: args.targetEngine as any,
+          planOnly: Boolean(args.planOnly),
+          compare: args.compare !== false
+        });
+        return {
+          isError: !recResult.success,
+          content: [{ type: "text", text: JSON.stringify(recResult, null, 2) }]
         };
       }
 

@@ -8,3 +8,7 @@ export * from "./investigation/reaBridge.js";
 export * from "./verifier/verifier.js";
 export * from "./mcp/server.js";
 export * from "./cli/index.js";
+export * from "./recreation/investigator.js";
+export * from "./recreation/planner.js";
+export * from "./recreation/comparator.js";
+export * from "./recreation/orchestrator.js";

@@ -59,16 +59,17 @@ Wasp is a declarative full-stack framework utilizing Haskell for compilation and
 
 ---
 
-## 3. Forge MCP Server Tool Spectrum (213 Tools)
+## 3. Forge MCP Server Tool Spectrum (214 Tools)
 
-Forge exposes a total of **213 tools** over standard Model Context Protocol:
-* **6 Forge Core Tools:**
-  1. `forge_inspect_reference`: Analyzes existing codebases via REA or Forge AST parser.
-  2. `forge_create_spec`: Converts natural-language requests into validated `ForgeSpec` JSON.
-  3. `forge_generate_app`: Scaffolds full-stack web applications (`wasp` or `fullstack-node`).
-  4. `forge_verify_app`: Runs bounded test suites and applies autonomous self-repair.
-  5. `forge_wasp_cli`: Executes native Wasp CLI commands with platform prerequisite handling.
-  6. `forge_rea_tool`: Universal proxy executing any of the 207 REA tools with AbortSignal cancellation.
+Forge exposes a total of **214 tools** over standard Model Context Protocol:
+* **7 Forge Core Tools:**
+  1. `forge_create_spec`: Converts natural-language requests into validated `ForgeSpec` JSON.
+  2. `forge_generate_project`: Scaffolds full-stack web applications (`wasp` or `fullstack-node`).
+  3. `forge_verify_project`: Runs bounded test suites and applies autonomous self-repair.
+  4. `forge_rea_status`: Probes host environment for REA CLI, catalog, and local repository.
+  5. `forge_rea_tool`: Universal proxy executing any of the 207 REA tools with AbortSignal cancellation.
+  6. `forge_wasp_cli`: Executes native Wasp CLI commands with platform prerequisite handling.
+  7. `forge_recreate_app`: Autonomous 8-stage recreation pipeline (investigate -> specify -> plan -> build -> verify -> compare).
 * **207 Collision-Safe REA Tools (`rea_<upstream_tool_name>`):**
   - Direct 1:1 access to all 207 REA tools preserving their original descriptions, input schemas, and AbortSignal cancellation.
 
@@ -79,3 +80,14 @@ Forge exposes a total of **213 tools** over standard Model Context Protocol:
 - `D:\git hub\wasp` (`wasp-lang/wasp`): branch `main`, 0 uncommitted changes, 100% pristine.
 - `D:\git hub\rea` (`morluto/rea`): branch `main`, 0 uncommitted changes, 100% pristine.
 - Programmatically verified in automated test suite (`tests/phase12ParityAudit.test.ts`).
+
+---
+
+## 5. Software Recreation & Behavioral Comparison Spectrum (Phase 13)
+
+| Mode | Input Type | Domain Coverage | Engine Support | Verification & Comparison |
+|---|---|---|---|---|
+| **Reference-Driven** | Physical path to directory, SQLite DB, or binary fixture | Extracted relational models, endpoints, schemas | `fullstack-node` (native) or `wasp` (conforming) | Dual-server live probe against `/api/health`, CRUD, and export |
+| **Feature-Driven** | Natural language description without target path | Document Studio, rich-text editor, tasks | `fullstack-node` or `wasp` | Bounded execution, debounced autosave verification, multi-format export |
+| **Greenfield** | Natural language prompt for novel app | Arbitrary relational schemas and actions | `fullstack-node` or `wasp` | Self-repair verification, persistence check across process death |
+

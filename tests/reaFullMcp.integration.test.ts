@@ -68,16 +68,17 @@ describe("Phase 12: Complete Upstream REA MCP Integration & Capability Verificat
     expect(toolNames.has("list_frida_devices")).toBe(true);
   });
 
-  it("exposes all 207 REA tools plus 6 Forge tools (213 total) over Forge MCP protocol", async () => {
+  it("exposes all 207 REA tools plus 7 Forge tools (214 total) over Forge MCP protocol", async () => {
     const result = await client.listTools();
-    expect(result.tools.length).toBe(213);
+    expect(result.tools.length).toBe(214);
 
-    // 6 Forge core tools
+    // 7 Forge core tools
     const toolNames = result.tools.map((t) => t.name);
     expect(toolNames).toContain("forge_inspect_reference");
     expect(toolNames).toContain("forge_create_spec");
     expect(toolNames).toContain("forge_generate_app");
     expect(toolNames).toContain("forge_verify_app");
+    expect(toolNames).toContain("forge_recreate_app");
     expect(toolNames).toContain("forge_rea_tool");
     expect(toolNames).toContain("forge_wasp_cli");
 

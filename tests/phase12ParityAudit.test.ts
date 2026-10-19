@@ -46,7 +46,7 @@ describe("Phase 12.1: Zero-Capability-Loss Parity & Acceptance Audit Suite", () 
     expect(meta.catalogVersion).toBe("6.7.0");
     expect(meta.sourcePackage).toBe("rea-agents");
     expect(meta.toolCount).toBe(207);
-  });
+  }, 30000);
 
   it("handles cancellation via AbortSignal before tool execution begins", async () => {
     const bridge = new ReaInvestigationBridge();

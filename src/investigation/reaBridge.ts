@@ -65,6 +65,11 @@ export class ReaInvestigationBridge {
   constructor(reaPath?: string) {
     if (reaPath && fs.existsSync(reaPath)) {
       this.reaRootPath = path.resolve(reaPath);
+    } else {
+      const siblingRea = path.resolve(process.cwd(), "..", "rea");
+      if (fs.existsSync(siblingRea)) {
+        this.reaRootPath = siblingRea;
+      }
     }
   }
 

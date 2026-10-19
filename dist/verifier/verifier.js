@@ -156,15 +156,78 @@ export class ForgeVerifier {
                     const db = new DatabaseSync(dbPath);
                     try {
                         db.exec("PRAGMA journal_mode = WAL;");
-                        db.exec(`
-              CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                isDone INTEGER NOT NULL DEFAULT 0,
-                createdAt TEXT NOT NULL
-              );
-            `);
-                        repairedIssues.push("Initialized SQLite database schema in app.db");
+                        let isDocEditor = false;
+                        let title = "Document";
+                        const specPath = path.join(resolvedDir, "forgespec.json");
+                        if (fs.existsSync(specPath)) {
+                            try {
+                                const parsed = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+                                if (parsed.metadata?.domain === "document-editor" ||
+                                    parsed.domain === "document-editor" ||
+                                    parsed.entities?.some((e) => String(e.name).toLowerCase().includes("document")) ||
+                                    parsed.models?.some((m) => String(m.name).toLowerCase().includes("document"))) {
+                                    isDocEditor = true;
+                                    title = parsed.title || title;
+                                }
+                            }
+                            catch {
+                                // Ignore parse errors
+                            }
+                        }
+                        const serverPath = path.join(resolvedDir, "server.js");
+                        if (!isDocEditor && fs.existsSync(serverPath)) {
+                            const serverCode = fs.readFileSync(serverPath, "utf-8");
+                            if (serverCode.includes("documents (") || serverCode.includes("CREATE TABLE IF NOT EXISTS documents")) {
+                                isDocEditor = true;
+                            }
+                        }
+                        if (isDocEditor) {
+                            db.exec(`
+                CREATE TABLE IF NOT EXISTS documents (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  title TEXT NOT NULL,
+                  content TEXT NOT NULL DEFAULT '',
+                  format TEXT NOT NULL DEFAULT 'html',
+                  wordCount INTEGER NOT NULL DEFAULT 0,
+                  isArchived INTEGER NOT NULL DEFAULT 0,
+                  createdAt TEXT NOT NULL,
+                  updatedAt TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS revisions (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  documentId INTEGER NOT NULL,
+                  contentSnapshot TEXT NOT NULL,
+                  summary TEXT,
+                  savedAt TEXT NOT NULL
+                );
+              `);
+                            const countRow = db.prepare("SELECT COUNT(*) AS count FROM documents").get();
+                            if (countRow.count === 0) {
+                                const seed = db.prepare(`
+                  INSERT INTO documents (title, content, format, wordCount, isArchived, createdAt, updatedAt)
+                  VALUES (?, ?, 'html', 12, 0, ?, ?)
+                `);
+                                const now = new Date().toISOString();
+                                seed.run(`Welcome to ${title}`, "<p>Welcome to Document Studio.</p>", now, now);
+                            }
+                            repairedIssues.push("Initialized SQLite database schema in app.db (documents & revisions)");
+                        }
+                        else {
+                            db.exec(`
+                CREATE TABLE IF NOT EXISTS tasks (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  title TEXT NOT NULL,
+                  isDone INTEGER NOT NULL DEFAULT 0,
+                  createdAt TEXT NOT NULL
+                );
+              `);
+                            const countRow = db.prepare("SELECT COUNT(*) AS count FROM tasks").get();
+                            if (countRow.count === 0) {
+                                const seed = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, 0, ?)");
+                                seed.run("Default task", new Date().toISOString());
+                            }
+                            repairedIssues.push("Initialized SQLite database schema in app.db");
+                        }
                         appliedAny = true;
                     }
                     finally {

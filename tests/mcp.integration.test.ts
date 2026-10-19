@@ -189,8 +189,9 @@ describe("Agent App Forge - Real MCP Protocol Integration Suite", () => {
     try {
       await stdioClient.connect(stdioTransport);
       const toolList = await stdioClient.listTools();
-      expect(toolList.tools.length).toBe(213);
+      expect(toolList.tools.length).toBe(214);
       expect(toolList.tools.some((t) => t.name === "forge_create_spec")).toBe(true);
+      expect(toolList.tools.some((t) => t.name === "forge_recreate_app")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "forge_rea_tool")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "forge_wasp_cli")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "rea_inspect_sqlite_database")).toBe(true);

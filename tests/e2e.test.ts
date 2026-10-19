@@ -117,10 +117,12 @@ describe("End-to-End MVP Verification: Persistent Task Manager Lifecycle", () =>
 
       // Cleanly terminate server 2
       server2.kill();
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 400));
     } finally {
-      // Step 8: Clean up temporary directory
-      fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      // Step 8: Clean up temporary directory safely on Windows
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      } catch {}
     }
   });
 });
