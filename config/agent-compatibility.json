@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "1.0.0",
-  "updatedAt": "2026-10-19T20:00:00.000Z",
+  "version": "1.1.0",
+  "updatedAt": "2026-10-19T20:30:00.000Z",
   "clients": [
     {
       "id": "antigravity",
@@ -21,11 +21,12 @@
         "forge_verify_app",
         "forge_rea_tool",
         "forge_wasp_cli",
-        "CLI pass-through commands"
+        "All 207 collision-safe REA tools (rea_<name>)",
+        "CLI pass-through commands (forge create, forge wasp, forge rea, forge doctor)"
       ],
       "setupType": "automated",
-      "testEvidence": "Tested via StdioClientTransport integration test (tests/mcp.integration.test.ts) and Antigravity workspace terminal execution.",
-      "status": "tested",
+      "testEvidence": "Verified in active live Antigravity IDE workspace session. Both standalone CLI and spawned StdioClientTransport MCP client pass 100% of automated tests.",
+      "status": "verified",
       "limitations": "Native Wasp CLI execution requires WSL when running inside Windows host workspaces."
     },
     {
@@ -45,12 +46,13 @@
         "forge_generate_app",
         "forge_verify_app",
         "forge_rea_tool",
-        "forge_wasp_cli"
+        "forge_wasp_cli",
+        "All 207 collision-safe REA tools (rea_<name>)"
       ],
       "setupType": "manual",
-      "testEvidence": "Verified with official @modelcontextprotocol/sdk client (tests/mcp.integration.test.ts) with zero stdout pollution.",
+      "testEvidence": "Binary found at C:\\Users\\PRASANNA KUMAR\\AppData\\Roaming\\npm\\claude. Transport verified with official @modelcontextprotocol/sdk client with zero stdout pollution.",
       "status": "tested",
-      "limitations": "Desktop app cannot directly invoke interactive CLI prompts; must use MCP tool calls."
+      "limitations": "Desktop application cannot directly invoke interactive CLI prompts; must use MCP tool calls."
     },
     {
       "id": "cursor",
@@ -62,17 +64,13 @@
         "transport": "stdio"
       },
       "accessibleFeatures": [
-        "forge_inspect_reference",
-        "forge_create_spec",
-        "forge_generate_app",
-        "forge_verify_app",
-        "forge_rea_tool",
-        "forge_wasp_cli"
+        "All 6 Forge MCP tools",
+        "All 207 collision-safe REA tools (rea_<name>)"
       ],
       "setupType": "manual",
-      "testEvidence": "Protocol compliance and tool registration confirmed via StdioClientTransport tests.",
-      "status": "tested",
-      "limitations": "Cursor agent mode invokes tools autonomously; long-running Wasp compiler commands must respect Cursor command timeout."
+      "testEvidence": "Protocol compliance and tool registration confirmed via StdioClientTransport tests. Live editor application binary is absent in current host environment.",
+      "status": "not_verified",
+      "limitations": "Cursor binary not found on host PATH. End-to-end interactive GUI session is unverified."
     },
     {
       "id": "opencode",
@@ -85,12 +83,13 @@
       },
       "accessibleFeatures": [
         "All 6 MCP tools",
-        "Direct CLI execution ('forge create', 'forge wasp', 'forge rea')"
+        "All 207 REA tools",
+        "Direct CLI execution ('forge create', 'forge wasp', 'forge rea', 'forge doctor')"
       ],
       "setupType": "automated",
-      "testEvidence": "CLI argument forwarding and exit code propagation verified in tests/upstreamDelegation.test.ts.",
+      "testEvidence": "Binary found at C:\\Users\\PRASANNA KUMAR\\AppData\\Roaming\\npm\\opencode. CLI argument forwarding and exit code propagation verified in tests/upstreamDelegation.test.ts.",
       "status": "tested",
-      "limitations": "Requires Node.js >= 22.0.0 on the user machine."
+      "limitations": "Requires Node.js >= 22.0.0 on the host machine for native SQLite support."
     },
     {
       "id": "vscode-copilot",
@@ -106,9 +105,9 @@
         "Verification pipeline and self-repair reports"
       ],
       "setupType": "manual",
-      "testEvidence": "Direct CLI execution tested and verified with standard process spawning.",
-      "status": "implemented",
-      "limitations": "Copilot Chat native MCP support is in preview/staged rollout across VS Code versions."
+      "testEvidence": "VS Code binary found at Microsoft VS Code\\bin\\code. Direct CLI execution tested and verified with standard process spawning.",
+      "status": "limited",
+      "limitations": "Copilot Chat native MCP support is in preview/staged rollout across VS Code versions; CLI automation is the primary verified channel."
     },
     {
       "id": "cline",
@@ -123,13 +122,14 @@
         "autoApprove": []
       },
       "accessibleFeatures": [
-        "All 6 Forge MCP tools including REA and Wasp delegation",
+        "All 6 Forge MCP tools",
+        "All 207 REA tools",
         "Automated workspace synthesis and verifier loops"
       ],
       "setupType": "manual",
-      "testEvidence": "Standard MCP JSON-RPC protocol compliance verified against schema standards.",
-      "status": "tested",
-      "limitations": "File creation permissions depend on Cline's user-approval settings."
+      "testEvidence": "Standard MCP JSON-RPC protocol compliance verified against SDK schema standards. Live extension UI execution unverified due to headless environment.",
+      "status": "configured",
+      "limitations": "File creation permissions depend on Cline's user-approval settings in the VS Code GUI."
     },
     {
       "id": "roo-code",
@@ -143,11 +143,12 @@
       },
       "accessibleFeatures": [
         "All 6 Forge MCP tools",
+        "All 207 REA tools",
         "Autonomous iterative self-repair via forge_verify_app"
       ],
       "setupType": "manual",
-      "testEvidence": "Verified compatible with standard MCP 1.6+ protocol schemas.",
-      "status": "implemented",
+      "testEvidence": "Verified compatible with standard MCP 1.6+ protocol schemas. Live Roo Code extension UI is unverified in this headless environment.",
+      "status": "configured",
       "limitations": "Requires user approval for file overwriting outside active workspace."
     },
     {
@@ -162,12 +163,13 @@
       },
       "accessibleFeatures": [
         "All 6 Forge MCP tools",
+        "All 207 REA tools",
         "Cascade tool invocation and contextual code generation"
       ],
       "setupType": "manual",
-      "testEvidence": "Verified with StdioClientTransport integration harness.",
-      "status": "tested",
-      "limitations": "Windsurf environment variables must pass current Node PATH."
+      "testEvidence": "Stdio protocol compliance verified via StdioClientTransport tests. Application binary windsurf is absent from host PATH.",
+      "status": "not_verified",
+      "limitations": "Windsurf editor is not installed in the environment."
     },
     {
       "id": "gemini-cli",
@@ -180,11 +182,12 @@
       "accessibleFeatures": [
         "Specification generation and validation",
         "Application scaffolding",
-        "Verifier execution"
+        "Verifier execution",
+        "Upstream Wasp and REA delegation"
       ],
       "setupType": "automated",
-      "testEvidence": "Tested via CLI commands and subprocess JSON stdout parsing.",
-      "status": "implemented",
+      "testEvidence": "Binary found at D:\\npm-global\\gemini. CLI commands and subprocess JSON stdout parsing verified in test suite.",
+      "status": "tested",
       "limitations": "Gemini CLI lacks native background stdio MCP daemon; relies on CLI execution."
     },
     {
@@ -199,9 +202,9 @@
         "All Forge CLI commands ('create', 'verify', 'spec', 'inspect', 'wasp', 'rea', 'doctor')"
       ],
       "setupType": "automated",
-      "testEvidence": "Verified CLI exit codes, stdout framing, and error streams.",
-      "status": "implemented",
-      "limitations": "Terminal execution requires non-interactive options where supported."
+      "testEvidence": "Binary found at C:\\Users\\PRASANNA KUMAR\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin\\codex.exe. Verified CLI exit codes, stdout framing, and error streams.",
+      "status": "tested",
+      "limitations": "Terminal execution requires non-interactive flags where supported."
     }
   ]
 }

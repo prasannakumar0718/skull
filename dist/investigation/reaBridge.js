@@ -1,6 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 /**
  * Bridges Agent App Forge to REA (Reverse Engineer Anything) capabilities.
  *
@@ -210,9 +213,32 @@ export class ReaInvestigationBridge {
         this.customProvider = provider;
     }
     /**
-     * Returns list of upstream REA tools supported by the REA contract.
+     * Returns list of upstream REA tools supported by the REA contract (all 207 upstream tools).
      */
     listSupportedReaTools() {
+        try {
+            let catalogPath = path.resolve(__dirname, "reaCatalog.json");
+            if (!fs.existsSync(catalogPath)) {
+                catalogPath = path.resolve(__dirname, "../src/investigation/reaCatalog.json");
+            }
+            if (!fs.existsSync(catalogPath)) {
+                catalogPath = path.resolve(process.cwd(), "src/investigation/reaCatalog.json");
+            }
+            if (fs.existsSync(catalogPath)) {
+                const raw = fs.readFileSync(catalogPath, "utf-8");
+                const catalog = JSON.parse(raw);
+                if (Array.isArray(catalog) && catalog.length > 0) {
+                    return catalog.map((t) => ({
+                        name: t.name,
+                        description: t.description || `Upstream REA analysis tool: ${t.name}`,
+                        inputSchema: t.inputSchema || { type: "object", properties: {} }
+                    }));
+                }
+            }
+        }
+        catch {
+            // Fallback to static catalog if catalog file read fails
+        }
         return [
             {
                 name: "inspect_artifact",
@@ -278,17 +304,18 @@ export class ReaInvestigationBridge {
      */
     executeReaCliCommand(args) {
         const reaStatus = this.probeReaStatus();
-        if (!reaStatus.cliFound && !reaStatus.mcpFound) {
-            return {
-                success: false,
-                exitCode: 1,
-                stdout: "",
-                stderr: `REA CLI is not installed in PATH, and the repository at '${this.reaRootPath || "../rea"}' is unbuilt.`,
-                notes: reaStatus.details
-            };
-        }
         try {
-            const cmd = reaStatus.cliFound ? "rea" : `node "${path.join(this.reaRootPath, "scripts", "rea.mjs")}"`;
+            let cmd;
+            if (reaStatus.cliFound) {
+                cmd = "rea";
+            }
+            else if (this.reaRootPath && fs.existsSync(path.join(this.reaRootPath, "dist", "cli-runtime", "cli.js"))) {
+                cmd = `node "${path.join(this.reaRootPath, "scripts", "rea.mjs")}"`;
+            }
+            else {
+                // Fall back to upstream rea-agents package via npx
+                cmd = process.platform === "win32" ? "npx.cmd --yes rea-agents@6.7.0" : "npx --yes rea-agents@6.7.0";
+            }
             const fullCmd = `${cmd} ${args.map((a) => (a.includes(" ") ? `"${a}"` : a)).join(" ")}`;
             const stdout = execSync(fullCmd, { encoding: "utf-8", timeout: 30000 });
             return {
@@ -303,15 +330,15 @@ export class ReaInvestigationBridge {
                 success: false,
                 exitCode: err.status || 1,
                 stdout: (err.stdout || "").toString().trim(),
-                stderr: (err.stderr || err.message || "").toString().trim()
+                stderr: (err.stderr || err.message || "").toString().trim(),
+                notes: reaStatus.details
             };
         }
     }
     /**
-     * Delegates invocation of a native REA MCP tool.
+     * Delegates invocation of a native REA MCP tool using the real upstream MCP interface.
      */
     async callReaNativeTool(toolName, toolArgs) {
-        const reaStatus = this.probeReaStatus();
         // If test fixture mode is set
         if (this.customProvider === "test-fixture") {
             return {
@@ -324,30 +351,82 @@ export class ReaInvestigationBridge {
                 }
             };
         }
-        if (!reaStatus.cliFound && !reaStatus.mcpFound) {
-            return {
-                isError: true,
-                error: `Native REA capability '${toolName}' is unavailable in the current environment.`,
-                remediation: reaStatus.details
-            };
-        }
-        // Call REA CLI tool execution pass-through
         try {
-            const output = execSync(`rea call ${toolName} '${JSON.stringify(toolArgs)}' --json`, {
-                encoding: "utf-8",
-                timeout: 30000
-            });
+            const res = await this.invokeReaMcpTool(toolName, toolArgs);
+            const isErr = res.isError ?? false;
+            let errMsg = undefined;
+            if (isErr) {
+                if (Array.isArray(res.content) && res.content[0]?.text) {
+                    errMsg = res.content[0].text;
+                }
+                else {
+                    errMsg = `Tool '${toolName}' execution returned error status.`;
+                }
+            }
             return {
-                isError: false,
-                data: JSON.parse(output)
+                isError: isErr,
+                data: res,
+                error: errMsg
             };
         }
         catch (err) {
             return {
                 isError: true,
-                error: err.stderr || err.message,
-                remediation: "Check REA logs or target binary compatibility."
+                error: err.message || `Failed to execute native REA tool '${toolName}'`,
+                remediation: "Verify that target path exists, arguments match schema, and required analysis providers are installed."
             };
+        }
+    }
+    /**
+     * Directly invokes the real upstream REA MCP server via StdioClientTransport.
+     */
+    async invokeReaMcpTool(toolName, toolArgs) {
+        const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+        const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
+        let cmd;
+        let args;
+        if (this.reaRootPath && fs.existsSync(path.join(this.reaRootPath, "dist", "mcp", "main.js"))) {
+            cmd = process.execPath;
+            args = [path.join(this.reaRootPath, "scripts", "rea.mjs"), "--mcp"];
+        }
+        else {
+            const probeCmd = process.platform === "win32" ? "where.exe rea" : "which rea";
+            let hasGlobalRea = false;
+            try {
+                execSync(probeCmd, { stdio: ["pipe", "pipe", "ignore"] });
+                hasGlobalRea = true;
+            }
+            catch { }
+            if (hasGlobalRea) {
+                cmd = "rea";
+                args = ["--mcp"];
+            }
+            else {
+                cmd = process.platform === "win32" ? "npx.cmd" : "npx";
+                args = ["--yes", "rea-agents@6.7.0", "--mcp"];
+            }
+        }
+        const transport = new StdioClientTransport({
+            command: cmd,
+            args
+        });
+        const client = new Client({
+            name: "forge-rea-delegator",
+            version: "0.1.0"
+        }, { capabilities: {} });
+        try {
+            await client.connect(transport);
+            const res = await client.callTool({
+                name: toolName,
+                arguments: toolArgs
+            });
+            return res;
+        }
+        finally {
+            try {
+                await client.close();
+            }
+            catch { }
         }
     }
     findFiles(dir, extensions) {

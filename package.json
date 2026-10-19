@@ -9,7 +9,7 @@
     "forge": "bin/forge.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"const fs=require('fs'); fs.mkdirSync('dist/investigation', {recursive:true}); fs.copyFileSync('src/investigation/reaCatalog.json', 'dist/investigation/reaCatalog.json');\"",
     "test": "vitest run",
     "mcp": "node bin/mcp.js",
     "forge": "node bin/forge.js"

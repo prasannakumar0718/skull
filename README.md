@@ -95,13 +95,16 @@ Configure Agent App Forge in your agent's MCP settings (`claude_desktop_config.j
 }
 ```
 
-### Available MCP Tools (6 Tools):
-1. `forge_inspect_reference`: Analyzes schemas and endpoints in reference codebases using REA or Forge's native parser.
-2. `forge_create_spec`: Converts natural-language requests into validated, editable `ForgeSpec` JSON with domain metadata.
-3. `forge_generate_app`: Scaffolds full-stack web applications into a specified directory (`wasp` or `fullstack-node`).
-4. `forge_verify_app`: Runs bounded test suites and applies autonomous self-repair.
-5. `forge_rea_tool`: Directly invokes upstream REA native tools (`inspect_artifact`, `analyze_function`, `compare_artifacts`, `get_call_graph`, `get_evidence_bundle`).
-6. `forge_wasp_cli`: Executes native Wasp CLI commands (`version`, `compile`, `start`, `db migrate-dev`) with platform prerequisite handling.
+### Available MCP Tools (213 Total Tools):
+- **Forge Core Tools (6):**
+  1. `forge_inspect_reference`: Analyzes schemas and endpoints in reference codebases using REA or Forge's native parser.
+  2. `forge_create_spec`: Converts natural-language requests into validated, editable `ForgeSpec` JSON with domain metadata.
+  3. `forge_generate_app`: Scaffolds full-stack web applications into a specified directory (`wasp` or `fullstack-node`).
+  4. `forge_verify_app`: Runs bounded test suites and applies autonomous self-repair.
+  5. `forge_rea_tool`: Universal proxy directly invoking any of upstream REA's 207 tools with full schemas and arguments.
+  6. `forge_wasp_cli`: Executes native Wasp CLI commands (`version`, `compile`, `start`, `db migrate-dev`) with platform prerequisite handling.
+- **Native REA Tools (207):**
+  - Dynamically exposed with collision-safe names (`rea_<upstream_tool_name>`, e.g., `rea_inspect_sqlite_database`, `rea_inspect_wasm_artifact`, `rea_inspect_artifact`, `rea_annotate_native_function`).
 
 ---
 
@@ -111,16 +114,16 @@ Agent App Forge provides dedicated integration configs, MCP settings, and verifi
 
 | Client Name | Client Type | Integration Route | Status |
 | :--- | :--- | :--- | :--- |
-| **Antigravity** | Agentic IDE | Stdio MCP (`mcpServers.agent-app-forge`) | **Tested & Verified** |
-| **Claude Code** | Terminal CLI | CLI wrapper & Project config (`CLAUDE.md`) | **Tested & Verified** |
-| **Codex CLI** | Terminal CLI | CLI wrapper (`forge create`, `forge verify`) | **Tested & Verified** |
-| **Gemini CLI** | Terminal CLI | CLI wrapper (`forge create`, `forge inspect`) | **Tested & Verified** |
-| **OpenCode** | Terminal CLI | CLI wrapper & OpenCode config | **Tested & Verified** |
-| **Cursor** | AI IDE | Stdio MCP (`.cursor/mcp.json`) | **Tested & Verified** |
-| **VS Code / Copilot** | Extension / IDE | Stdio MCP & VS Code Task definitions | **Tested & Verified** |
-| **Cline** | VS Code Extension | Stdio MCP (`cline_mcp_settings.json`) | **Tested & Verified** |
-| **Roo Code** | VS Code Extension | Stdio MCP (`roo_code_mcp_settings.json`) | **Tested & Verified** |
-| **Windsurf** | AI IDE | Stdio MCP (`mcp_config.json`) | **Tested & Verified** |
+| **Antigravity** | Agentic IDE | Stdio MCP (`mcpServers.agent-app-forge`) | **`verified`** (Live IDE session verified) |
+| **Claude Code** | Terminal CLI | CLI wrapper & Project config (`CLAUDE.md`) | **`tested`** (Binary found; MCP transport verified) |
+| **Codex CLI** | Terminal CLI | CLI wrapper (`forge create`, `forge verify`) | **`tested`** (Binary found; CLI execution verified) |
+| **Gemini CLI** | Terminal CLI | CLI wrapper (`forge create`, `forge inspect`) | **`tested`** (Binary found; CLI parsing verified) |
+| **OpenCode** | Terminal CLI | CLI wrapper & OpenCode config | **`tested`** (Binary found; CLI delegation verified) |
+| **Cursor** | AI IDE | Stdio MCP (`.cursor/mcp.json`) | **`not_verified`** (Configured; binary absent on host) |
+| **VS Code / Copilot** | Extension / IDE | Stdio MCP & VS Code Task definitions | **`limited`** (Binary found; Copilot MCP in preview) |
+| **Cline** | VS Code Extension | Stdio MCP (`cline_mcp_settings.json`) | **`configured`** (Protocol tested; GUI unverified) |
+| **Roo Code** | VS Code Extension | Stdio MCP (`roo_code_mcp_settings.json`) | **`configured`** (Protocol tested; GUI unverified) |
+| **Windsurf** | AI IDE | Stdio MCP (`mcp_config.json`) | **`not_verified`** (Configured; binary absent on host) |
 
 Full configuration templates and setup details are available in:
 * [`config/agent-compatibility.json`](config/agent-compatibility.json) (Machine-readable registry)
@@ -130,22 +133,23 @@ Full configuration templates and setup details are available in:
 
 ## 🧪 Test Suites
 
-Agent App Forge includes 49 automated tests across 9 specialized test suites (100% pass rate):
+Agent App Forge includes 56 automated tests across 10 specialized test suites (100% pass rate):
 
 ```bash
 # Run the complete test suite
 npm test
 
 # Run individual suites
-npx vitest run tests/spec.test.ts               # Domain inference and schema validation (8 tests)
-npx vitest run tests/waspEngine.test.ts          # Wasp 0.26.1 specification compliance (2 tests)
-npx vitest run tests/forge.test.ts               # Path traversal prevention & orchestration (4 tests)
-npx vitest run tests/securityRegression.test.ts  # Node runtime check, traversal, injection, redaction (6 tests)
-npx vitest run tests/reaBridge.test.ts           # REA probing & source parser tests (5 tests)
-npx vitest run tests/mcp.integration.test.ts     # Real MCP Client protocol, Stdio purity & 6 tools (10 tests)
-npx vitest run tests/e2e.test.ts                 # End-to-end CRUD & restart persistence (1 test)
-npx vitest run tests/upstreamDelegation.test.ts  # CLI pass-through, REA catalog, explicit engines (8 tests)
-npx vitest run tests/verifier.test.ts            # Fault injection, timeouts, SQLite repair (5 tests)
+npx vitest run tests/spec.test.ts                  # Domain inference and schema validation (8 tests)
+npx vitest run tests/waspEngine.test.ts             # Wasp 0.26.1 specification compliance (2 tests)
+npx vitest run tests/forge.test.ts                  # Path traversal prevention & orchestration (4 tests)
+npx vitest run tests/securityRegression.test.ts     # Node runtime check, traversal, injection, redaction (6 tests)
+npx vitest run tests/reaBridge.test.ts              # REA probing & source parser tests (5 tests)
+npx vitest run tests/e2e.test.ts                    # End-to-end CRUD & restart persistence (1 test)
+npx vitest run tests/mcp.integration.test.ts        # Live MCP Client protocol, Stdio purity & 213 tools (10 tests)
+npx vitest run tests/upstreamDelegation.test.ts     # CLI pass-through, REA catalog, explicit engines (8 tests)
+npx vitest run tests/verifier.test.ts               # Fault injection, timeouts, SQLite repair (5 tests)
+npx vitest run tests/reaFullMcp.integration.test.ts # Full 207 REA tools discovery, live SQLite execution (7 tests)
 ```
 
 See the complete execution report in [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md).

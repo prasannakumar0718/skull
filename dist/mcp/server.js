@@ -67,11 +67,11 @@ export function createForgeMcpServer(reaPath) {
         },
         {
             name: "forge_rea_tool",
-            description: "Delegate invocation directly to a native REA MCP tool (e.g., inspect_artifact, analyze_function, compare_artifacts, get_call_graph).",
+            description: "Delegate invocation directly to any native REA MCP tool (supports all 207 tools across REA's full inventory, e.g., inspect_sqlite_database, inspect_artifact, analyze_function, compare_artifacts).",
             inputSchema: {
                 type: "object",
                 properties: {
-                    toolName: { type: "string", description: "Name of the REA tool to invoke" },
+                    toolName: { type: "string", description: "Name of the REA tool to invoke (e.g. inspect_sqlite_database, inspect_artifact, analyze_function)" },
                     toolArguments: { type: "object", description: "Arguments payload matching the REA tool schema" }
                 },
                 required: ["toolName", "toolArguments"]
@@ -90,8 +90,15 @@ export function createForgeMcpServer(reaPath) {
             }
         }
     ];
+    // Dynamically expose all 207 native REA tools with collision-safe names 'rea_<name>'
+    const nativeReaTools = investigationBridge.listSupportedReaTools().map((t) => ({
+        name: `rea_${t.name}`,
+        description: `[Upstream REA Native Tool] ${t.description}`,
+        inputSchema: t.inputSchema
+    }));
+    const allTools = [...tools, ...nativeReaTools];
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools
+        tools: allTools
     }));
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const { name, arguments: args } = request.params;
@@ -102,6 +109,15 @@ export function createForgeMcpServer(reaPath) {
             };
         }
         try {
+            // Direct collision-safe REA native tool invocation
+            if (name.startsWith("rea_")) {
+                const upstreamName = name.slice(4);
+                const reaResult = await investigationBridge.callReaNativeTool(upstreamName, (args || {}));
+                return {
+                    isError: reaResult.isError,
+                    content: [{ type: "text", text: JSON.stringify(reaResult.data ?? reaResult, null, 2) }]
+                };
+            }
             if (name === "forge_inspect_reference") {
                 if (!args || typeof args.referencePath !== "string" || !args.referencePath.trim()) {
                     return {

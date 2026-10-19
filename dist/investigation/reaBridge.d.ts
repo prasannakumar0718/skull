@@ -56,7 +56,7 @@ export declare class ReaInvestigationBridge {
     private executeFixtureAnalysis;
     setProviderForTesting(provider?: InvestigationProvider): void;
     /**
-     * Returns list of upstream REA tools supported by the REA contract.
+     * Returns list of upstream REA tools supported by the REA contract (all 207 upstream tools).
      */
     listSupportedReaTools(): Array<{
         name: string;
@@ -74,7 +74,7 @@ export declare class ReaInvestigationBridge {
         notes?: string;
     };
     /**
-     * Delegates invocation of a native REA MCP tool.
+     * Delegates invocation of a native REA MCP tool using the real upstream MCP interface.
      */
     callReaNativeTool(toolName: string, toolArgs: Record<string, unknown>): Promise<{
         isError: boolean;
@@ -82,5 +82,9 @@ export declare class ReaInvestigationBridge {
         error?: string;
         remediation?: string;
     }>;
+    /**
+     * Directly invokes the real upstream REA MCP server via StdioClientTransport.
+     */
+    private invokeReaMcpTool;
     private findFiles;
 }
