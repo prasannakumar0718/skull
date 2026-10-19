@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reference Document App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar: Observable UI State 1 (Document List & Management) -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>Reference Docs</h2>
+        <button id="btn-new-doc" class="btn btn-primary">+ New</button>
+      </div>
+      <ul id="doc-list" class="doc-list"></ul>
+    </aside>
+
+    <!-- Main Studio Canvas: Observable UI State 2 & 3 (Editor & Formatting) -->
+    <main class="main-canvas" id="editor-container">
+      <header class="toolbar">
+        <input type="text" id="doc-title" class="title-input" placeholder="Untitled Document" />
+        <div class="toolbar-actions">
+          <span id="save-status" class="badge badge-saved">Saved</span>
+          <span id="word-count" class="word-counter">0 words</span>
+          <div class="export-dropdown">
+            <button id="btn-export" class="btn btn-secondary">Export &dtrif;</button>
+            <div id="export-menu" class="dropdown-content">
+              <a href="#" data-format="html">HTML Document (.html)</a>
+              <a href="#" data-format="markdown">Markdown (.md)</a>
+              <a href="#" data-format="text">Plain Text (.txt)</a>
+              <a href="#" data-format="json">Document JSON (.json)</a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="format-bar">
+        <button type="button" class="tool-btn" data-cmd="bold"><b>B</b></button>
+        <button type="button" class="tool-btn" data-cmd="italic"><i>I</i></button>
+        <button type="button" class="tool-btn" data-cmd="underline"><u>U</u></button>
+        <button type="button" class="tool-btn" data-cmd="formatBlock" data-val="h1">H1</button>
+        <button type="button" class="tool-btn" data-cmd="formatBlock" data-val="h2">H2</button>
+        <button type="button" class="tool-btn" data-cmd="insertUnorderedList">&bull; List</button>
+      </div>
+
+      <div id="editor-canvas" class="editor-surface" contenteditable="true" spellcheck="true"></div>
+    </main>
+
+    <!-- Empty State: Observable UI State 4 (Displayed when no document is active) -->
+    <div id="empty-state" class="empty-view" style="display: none;">
+      <h3>No Document Selected</h3>
+      <p>Create a new document or select an existing document from the sidebar to begin editing.</p>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

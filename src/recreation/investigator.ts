@@ -98,6 +98,29 @@ export class RecreationInvestigator {
     const baseInvestigation = await this.bridge.investigate(dirPath);
     evidence.push(...baseInvestigation.evidence);
 
+    // Run REA inspect_artifact on primary entry point server.js if present
+    const primaryEntry = path.join(dirPath, "server.js");
+    if (fs.existsSync(primaryEntry)) {
+      try {
+        const artifactRes = await this.bridge.callReaNativeTool("inspect_artifact", {
+          artifact_path: primaryEntry.replace(/\\/g, "/")
+        });
+        if (!artifactRes.isError && artifactRes.data) {
+          evidence.push({
+            sourcePath: primaryEntry,
+            kind: "bundle",
+            findings: {
+              type: "rea_artifact_inspection",
+              output: artifactRes.data
+            },
+            confidence: 0.97
+          });
+        }
+      } catch (err: any) {
+        limitations.push(`REA inspect_artifact on ${primaryEntry}: ${err.message}`);
+      }
+    }
+
     // 2. Scan for SQLite database files inside the reference directory
     const dbFiles = this.findFiles(dirPath, [".db", ".sqlite"]);
     for (const dbFile of dbFiles) {
@@ -130,6 +153,9 @@ export class RecreationInvestigator {
     const codeFiles = this.findFiles(dirPath, [".js", ".ts", ".json"]);
     let hasExportEndpoints = false;
     let hasAutosaveEndpoints = false;
+    let hasCreateRoute = false;
+    let hasRenameRoute = false;
+    let hasDeleteRoute = false;
 
     for (const file of codeFiles) {
       try {
@@ -144,12 +170,24 @@ export class RecreationInvestigator {
             confidence: 0.95
           });
         }
-        if (/autosave/i.test(content) || /save-status/i.test(content)) {
+        if (/autosave/i.test(content) || /save-status/i.test(content) || /PATCH.*content/i.test(content)) {
           hasAutosaveEndpoints = true;
           observedCapabilities.add("autosave");
         }
         if (/contenteditable|wysiwyg|quill|editor|formatting/i.test(content)) {
           observedCapabilities.add("rich-text-editing");
+        }
+        if (/POST.*documents/i.test(content) || /INSERT INTO documents/i.test(content)) {
+          hasCreateRoute = true;
+          observedCapabilities.add("document-create");
+        }
+        if (/title.*UPDATE|UPDATE.*title|PATCH.*title/i.test(content) || /doc-title/i.test(content)) {
+          hasRenameRoute = true;
+          observedCapabilities.add("document-rename");
+        }
+        if (/DELETE.*documents/i.test(content) || /DELETE FROM documents/i.test(content)) {
+          hasDeleteRoute = true;
+          observedCapabilities.add("document-delete");
         }
       } catch {}
     }
@@ -170,25 +208,68 @@ export class RecreationInvestigator {
     }
 
     // 5. Workflows based on observed features
-    if (observedCapabilities.has("rich-text-editing") || /document|editor/i.test(prompt)) {
+    // Workflow 1: Create and rename record
+    if (hasCreateRoute || hasRenameRoute || observedCapabilities.has("document-create")) {
       inferredWorkflows.push({
-        id: "wf_ref_editing",
-        name: "Observed Document Editing Workflow",
-        description: "Recreated from observed canvas editing in reference target",
-        trigger: "User edits text in main canvas",
+        id: "wf_create_rename",
+        name: "Create and Rename Document Workflow",
+        description: "Recreated from observed POST /api/documents and PATCH /api/documents/:id routes",
+        trigger: "User creates a document and updates its title",
         provenance: "observed",
         steps: [
-          { step: 1, action: "Initialize editor canvas", expectedOutcome: "Editable document surface rendered", provenance: "observed" },
-          { step: 2, action: "Apply text changes", expectedOutcome: "DOM updated with formatted nodes", provenance: "observed" }
+          { step: 1, action: "Send POST /api/documents with initial title", expectedOutcome: "New document created with autoincremented ID", provenance: "observed" },
+          { step: 2, action: "Send PATCH /api/documents/:id with updated title", expectedOutcome: "Document renamed and updatedAt timestamp refreshed", provenance: "observed" }
         ],
-        acceptanceCriteria: ["Text modifications reflect immediately", "Formatting tags preserved"]
+        acceptanceCriteria: [
+          "Document is initialized with title and content",
+          "Title update persists to SQLite database without altering body content"
+        ]
       });
     }
 
+    // Workflow 2: Edit and autosave record
+    if (hasAutosaveEndpoints || observedCapabilities.has("autosave") || observedCapabilities.has("rich-text-editing")) {
+      inferredWorkflows.push({
+        id: "wf_edit_save",
+        name: "Edit and Save Document Workflow",
+        description: "Recreated from observed editor canvas and PATCH autosave handler",
+        trigger: "User modifies document content",
+        provenance: "observed",
+        steps: [
+          { step: 1, action: "User inputs formatted text into canvas", expectedOutcome: "DOM reflects text and formatting nodes", provenance: "observed" },
+          { step: 2, action: "Autosave triggers debounced PATCH request", expectedOutcome: "Database updated and save status badge indicates Saved", provenance: "observed" }
+        ],
+        acceptanceCriteria: [
+          "Rich-text modifications reflect immediately",
+          "Debounced background autosave updates persistent storage"
+        ]
+      });
+    }
+
+    // Workflow 3: Delete record and confirm resulting state
+    if (hasDeleteRoute || observedCapabilities.has("document-delete")) {
+      inferredWorkflows.push({
+        id: "wf_delete_confirm",
+        name: "Delete Document and State Confirmation Workflow",
+        description: "Recreated from observed DELETE /api/documents/:id route",
+        trigger: "User deletes document record",
+        provenance: "observed",
+        steps: [
+          { step: 1, action: "Send DELETE /api/documents/:id", expectedOutcome: "Document removed from SQLite storage", provenance: "observed" },
+          { step: 2, action: "Query GET /api/documents/:id", expectedOutcome: "Server returns HTTP 404 confirming deletion", provenance: "observed" }
+        ],
+        acceptanceCriteria: [
+          "Record is deleted from SQLite database",
+          "Subsequent query for deleted record returns 404"
+        ]
+      });
+    }
+
+    // Workflow 4: Multi-format export
     if (hasExportEndpoints || observedCapabilities.has("document-export")) {
       inferredWorkflows.push({
         id: "wf_ref_export",
-        name: "Observed Document Export Workflow",
+        name: "Multi-Format Export Workflow",
         description: "Recreated from observed /export endpoint in reference target",
         trigger: "User invokes export action",
         provenance: "observed",
@@ -199,19 +280,10 @@ export class RecreationInvestigator {
       });
     }
 
-    if (hasAutosaveEndpoints || observedCapabilities.has("autosave")) {
-      inferredWorkflows.push({
-        id: "wf_ref_autosave",
-        name: "Observed Autosave Workflow",
-        description: "Recreated from observed autosave controller in reference target",
-        trigger: "Debounced user editing event",
-        provenance: "observed",
-        steps: [
-          { step: 1, action: "Debounce editing event", expectedOutcome: "Autosave request dispatched to backend", provenance: "observed" }
-        ],
-        acceptanceCriteria: ["Saves content to SQLite without blocking UI", "Status badge transitions to Saved"]
-      });
-    }
+    // Explicitly document REA capabilities and limitations
+    limitations.push(
+      "REA provides static artifact inspection and SQLite introspection; dynamic runtime client-side DOM interactions and HTTP routing behaviors are observed via Forge's authorized route parser and live HTTP probing."
+    );
 
     // Check for unknown or missing capabilities
     if (!hasExportEndpoints && /export|docx|pdf/i.test(prompt)) {

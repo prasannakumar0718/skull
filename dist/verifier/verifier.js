@@ -83,6 +83,29 @@ export class ForgeVerifier {
                 });
             }
         }
+        // Check 2.5: Entry point syntax verification (server.js)
+        if (fs.existsSync(serverPath)) {
+            try {
+                await execFileAsync(process.execPath, ["--check", "server.js"], {
+                    cwd: resolvedDir,
+                    timeout: 5000
+                });
+                checks.push({
+                    name: "Entry Point Syntax Verification",
+                    passed: true,
+                    message: "server.js syntax verified"
+                });
+            }
+            catch (err) {
+                checks.push({
+                    name: "Entry Point Syntax Verification",
+                    passed: false,
+                    classification: "SYNTAX_ERROR",
+                    message: "server.js syntax verification failed",
+                    details: this.sanitizeOutput(err.stderr || err.message || "")
+                });
+            }
+        }
         // Check 3: Bounded execution test (test.js)
         const testJsPath = path.join(resolvedDir, "test.js");
         if (fs.existsSync(testJsPath)) {
@@ -232,6 +255,22 @@ export class ForgeVerifier {
                     }
                     finally {
                         db.close();
+                    }
+                }
+                catch {
+                    // Repair attempt failed
+                }
+            }
+            if (check.classification === "SYNTAX_ERROR" || check.classification === "TEST_FAILURE") {
+                try {
+                    const specPath = path.join(resolvedDir, "forgespec.json");
+                    if (fs.existsSync(specPath)) {
+                        const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+                        const { EngineOrchestrator } = await import("../engines/orchestrator.js");
+                        const orchestrator = new EngineOrchestrator();
+                        await orchestrator.generateProject(spec, resolvedDir);
+                        repairedIssues.push("Restored corrupted source implementation from Forge specification");
+                        appliedAny = true;
                     }
                 }
                 catch {

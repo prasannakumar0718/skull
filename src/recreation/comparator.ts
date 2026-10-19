@@ -1,11 +1,24 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as http from "node:http";
+import * as net from "node:net";
 import { spawn } from "node:child_process";
 import { ForgeSpec } from "../spec/schema.js";
 import { RecreationInvestigation } from "./investigator.js";
 import { ImplementationPlan } from "./planner.js";
 import { ForgeVerifier } from "../verifier/verifier.js";
+
+function getAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, "127.0.0.1", () => {
+      const addr = srv.address() as net.AddressInfo;
+      const port = addr.port;
+      srv.close(() => resolve(port));
+    });
+    srv.on("error", reject);
+  });
+}
 
 export type EvaluationStatus = "pass" | "partial" | "fail" | "blocked" | "not_tested";
 
@@ -70,7 +83,7 @@ export class RecreationComparator {
     if (!hasStorage) discrepanciesDetected.push("Missing app.db database");
 
     // 3. Test running server and probe REST endpoints
-    const port = 58921;
+    const port = await getAvailablePort();
     let serverProcess: any = null;
 
     try {
@@ -125,26 +138,54 @@ export class RecreationComparator {
             if (pass) {
               const docId = createRes.data.id;
 
+              // Test Rename PATCH
+              const renameRes = await this.makeRequest("PATCH", `http://127.0.0.1:${port}/api/documents/${docId}`, {
+                title: "Renamed Document Title"
+              });
+              const renamePass = renameRes.statusCode === 200 && renameRes.data.title === "Renamed Document Title";
+              evaluations.push({
+                id: "feat_doc_rename",
+                feature: "Record Rename & Title Modification",
+                status: renamePass ? "pass" : "fail",
+                evidence: `PATCH /api/documents/${docId} returned HTTP ${renameRes.statusCode} with title '${renameRes.data.title}'`
+              });
+              if (!renamePass) discrepanciesDetected.push("Document rename operation failed");
+
               // Test Autosave PATCH
               const autosaveRes = await this.makeRequest("PATCH", `http://127.0.0.1:${port}/api/documents/${docId}`, {
-                content: "<h1>Comparison</h1><p>Updated content for <i>autosave</i> check.</p>"
+                content: "<h1>Renamed Document Title</h1><p>Updated content for <i>autosave</i> check.</p>"
               });
+              const autosavePass = autosaveRes.statusCode === 200 && Number(autosaveRes.data.wordCount) > 0;
               evaluations.push({
                 id: "feat_autosave",
                 feature: "Debounced Autosave & Content Revisions",
-                status: autosaveRes.statusCode === 200 ? "pass" : "fail",
+                status: autosavePass ? "pass" : "fail",
                 evidence: `PATCH /api/documents/${docId} returned HTTP ${autosaveRes.statusCode} with wordCount ${autosaveRes.data.wordCount}`
               });
+              if (!autosavePass) discrepanciesDetected.push("Autosave content modification failed");
 
               // Test Export format
               const exportRes = await this.makeRequest("GET", `http://127.0.0.1:${port}/api/documents/${docId}/export?format=markdown`);
-              const exportPass = exportRes.statusCode === 200 && String(exportRes.data).includes("# Comparison");
+              const exportPass = exportRes.statusCode === 200 && String(exportRes.data).includes("# Renamed Document Title");
               evaluations.push({
                 id: "feat_export",
-                feature: "Multi-Format Export Pipeline (Markdown/HTML)",
+                feature: "Multi-Format Export Pipeline (Markdown/HTML/Text/JSON)",
                 status: exportPass ? "pass" : "fail",
                 evidence: `GET /api/documents/${docId}/export?format=markdown returned HTTP ${exportRes.statusCode}`
               });
+              if (!exportPass) discrepanciesDetected.push("Document export pipeline failed");
+
+              // Test Delete and state confirmation
+              const deleteRes = await this.makeRequest("DELETE", `http://127.0.0.1:${port}/api/documents/${docId}`);
+              const verifyDelRes = await this.makeRequest("GET", `http://127.0.0.1:${port}/api/documents/${docId}`);
+              const deletePass = deleteRes.statusCode === 200 && verifyDelRes.statusCode === 404;
+              evaluations.push({
+                id: "feat_doc_delete",
+                feature: "Record Deletion & State Confirmation",
+                status: deletePass ? "pass" : "fail",
+                evidence: `DELETE /api/documents/${docId} returned HTTP ${deleteRes.statusCode}; subsequent GET returned HTTP ${verifyDelRes.statusCode}`
+              });
+              if (!deletePass) discrepanciesDetected.push("Record deletion state confirmation failed");
             }
           } catch (err: any) {
             evaluations.push({

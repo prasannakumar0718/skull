@@ -83,15 +83,53 @@ export const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const patchMatch = pathname.match(/^\/api\/documents\/(\d+)$/);
-  if (method === "PATCH" && patchMatch) {
-    const id = parseInt(patchMatch[1], 10);
-    const data = await readBody();
-    const now = new Date().toISOString();
-    db.prepare("UPDATE documents SET content = ?, updatedAt = ? WHERE id = ?").run(data.content || "", now, id);
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ id, content: data.content, updatedAt: now }));
-    return;
+  const docMatch = pathname.match(/^\/api\/documents\/(\d+)$/);
+  if (docMatch) {
+    const id = parseInt(docMatch[1], 10);
+
+    // GET /api/documents/:id
+    if (method === "GET") {
+      const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(id);
+      if (!doc) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Document not found" }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(doc));
+      return;
+    }
+
+    // PATCH /api/documents/:id (Rename & Content Update)
+    if (method === "PATCH") {
+      const existing = db.prepare("SELECT * FROM documents WHERE id = ?").get(id);
+      if (!existing) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Document not found" }));
+        return;
+      }
+      const data = await readBody();
+      const title = data.title !== undefined ? String(data.title).trim() : existing.title;
+      const content = data.content !== undefined ? String(data.content) : existing.content;
+      const now = new Date().toISOString();
+      db.prepare("UPDATE documents SET title = ?, content = ?, updatedAt = ? WHERE id = ?").run(title, content, now, id);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ id, title, content, updatedAt: now }));
+      return;
+    }
+
+    // DELETE /api/documents/:id (Delete & Confirm State)
+    if (method === "DELETE") {
+      const info = db.prepare("DELETE FROM documents WHERE id = ?").run(id);
+      if (info.changes === 0) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Document not found" }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, id }));
+      return;
+    }
   }
 
   const exportMatch = pathname.match(/^\/api\/documents\/(\d+)\/export$/);
@@ -105,12 +143,38 @@ export const server = http.createServer(async (req, res) => {
     }
     const format = (parsedUrl.searchParams.get("format") || "html").toLowerCase();
     if (format === "markdown" || format === "md") {
-      res.writeHead(200, { "Content-Type": "text/markdown" });
+      res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" });
       res.end(`# ${doc.title}\n\n${convertHtmlToMarkdown(doc.content)}\n`);
       return;
     }
-    res.writeHead(200, { "Content-Type": "text/html" });
+    if (format === "text" || format === "txt") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end(`${doc.title}\n\n${doc.content.replace(/<[^>]*>/g, "")}\n`);
+      return;
+    }
+    if (format === "json") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(doc, null, 2));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(`<!DOCTYPE html><html><body><h1>${doc.title}</h1><div>${doc.content}</div></body></html>`);
+    return;
+  }
+
+  // Static file serving from public/
+  const importFs = await import("node:fs");
+  let filePath = path.join(__dirname, "public", pathname === "/" ? "index.html" : pathname.slice(1));
+  if (importFs.existsSync(filePath) && importFs.statSync(filePath).isFile()) {
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      ".html": "text/html",
+      ".js": "application/javascript",
+      ".css": "text/css",
+      ".json": "application/json"
+    };
+    res.writeHead(200, { "Content-Type": mimeTypes[ext] || "text/plain" });
+    res.end(importFs.readFileSync(filePath));
     return;
   }
 

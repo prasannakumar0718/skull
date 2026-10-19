@@ -296,6 +296,26 @@ export const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (format === "doc" || format === "word") {
+      const wordHtml = \`<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>\${doc.title}</title>
+</head>
+<body>
+  <h1>\${doc.title}</h1>
+  <div>\${doc.content}</div>
+</body>
+</html>\`;
+      res.writeHead(200, {
+        "Content-Type": "application/msword; charset=utf-8",
+        "Content-Disposition": \`attachment; filename="\${encodeURIComponent(doc.title)}.doc"\`
+      });
+      res.end(wordHtml);
+      return;
+    }
+
     // Default HTML export
     const htmlBundle = \`<!DOCTYPE html>
 <html lang="en">
@@ -371,6 +391,8 @@ server.listen(PORT, () => {
         <div id="export-menu" class="dropdown-menu">
           <a href="#" data-format="html">HTML Document (.html)</a>
           <a href="#" data-format="markdown">Markdown (.md)</a>
+          <a href="#" data-format="doc">Microsoft Word (.doc)</a>
+          <a href="#" data-format="print">Print / PDF (.pdf)</a>
           <a href="#" data-format="text">Plain Text (.txt)</a>
           <a href="#" data-format="json">JSON Metadata (.json)</a>
         </div>
@@ -455,6 +477,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helve
 .editor-canvas p { margin-bottom: 14px; }
 .editor-canvas ul, .editor-canvas ol { margin-left: 24px; margin-bottom: 14px; }
 .editor-canvas blockquote { border-left: 3px solid #d1d5db; padding-left: 14px; color: #4b5563; font-style: italic; margin-bottom: 14px; }
+@media print {
+  .sidebar, .toolbar, .header, .btn-del-doc { display: none !important; }
+  .workspace { display: block !important; }
+  .editor-container { padding: 0 !important; width: 100% !important; }
+  .editor-canvas { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; max-width: 100% !important; min-height: auto !important; }
+  body { background: #ffffff !important; color: #000000 !important; }
+}
 `;
 
     files.push({
@@ -609,6 +638,10 @@ document.querySelectorAll("#export-menu a").forEach((item) => {
     e.preventDefault();
     if (!currentDocId) return;
     const format = item.dataset.format;
+    if (format === "print") {
+      window.print();
+      return;
+    }
     window.open(\`/api/documents/\${currentDocId}/export?format=\${format}\`, "_blank");
   });
 });
