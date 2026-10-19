@@ -45,8 +45,9 @@ export class EngineOrchestrator {
 
     for (const file of result.files) {
       const targetFile = path.resolve(resolvedOut, file.relativePath);
-      // Security check: path traversal prevention
-      if (!targetFile.startsWith(resolvedOut)) {
+      // Security check: path traversal prevention with strict boundary check
+      const relative = path.relative(resolvedOut, targetFile);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) {
         throw new Error(`Security Exception: File path escape detected: ${file.relativePath}`);
       }
       fs.mkdirSync(path.dirname(targetFile), { recursive: true });

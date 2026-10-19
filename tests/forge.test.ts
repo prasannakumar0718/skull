@@ -38,7 +38,7 @@ describe("Agent App Forge Core Suite", () => {
     expect(report.checks.some((c) => c.name === "Structure Check" && c.passed)).toBe(true);
 
     // Cleanup temp
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("generates Wasp-compliant specification and prisma schema when target is wasp", async () => {
@@ -58,6 +58,30 @@ describe("Agent App Forge Core Suite", () => {
     expect(mainWasp).toContain("export default app({");
 
     // Cleanup temp
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+
+  it("blocks path traversal and prevents writing outside target output directory", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "forge-sec-test-"));
+    const spec = createSpecFromPrompt("Security test", "sec-test");
+    const orchestrator = new EngineOrchestrator();
+
+    // Mock an engine generating path traversal attempt
+    const evilEngine = {
+      name: "fullstack-node",
+      canHandle: () => true,
+      generate: async () => ({
+        engineName: "fullstack-node",
+        files: [{ relativePath: "../../../evil.txt", content: "compromised" }],
+        entryPointInstructions: "",
+        supportedOnPlatform: true
+      })
+    };
+
+    (orchestrator as any).engines = [evilEngine];
+
+    await expect(orchestrator.generateProject(spec, tempDir)).rejects.toThrow("Security Exception: File path escape detected");
+
+    fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 });

@@ -1,74 +1,229 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execSync } from "node:child_process";
 /**
- * Bridges Agent App Forge to REA investigation capabilities.
- * If REA binaries/MCP tools are present, it leverages REA's deep binary/source analyzers.
- * If REA is not installed, it gracefully falls back to lightweight AST/heuristic extraction.
+ * Bridges Agent App Forge to REA (Reverse Engineer Anything) capabilities.
+ *
+ * DESIGN PRINCIPLE: Strict Truthfulness
+ * - If real REA CLI / MCP is installed and functioning, it executes REA tools.
+ * - If REA is unbuilt, uninstalled, or unavailable, it degrades gracefully to
+ *   Agent App Forge's native source parser and reports provider as 'forge-source-parser'.
+ * - It never claims REA was executed when only native Forge heuristic parsing was performed.
  */
 export class ReaInvestigationBridge {
     reaRootPath;
+    customProvider;
     constructor(reaPath) {
         if (reaPath && fs.existsSync(reaPath)) {
-            this.reaRootPath = reaPath;
+            this.reaRootPath = path.resolve(reaPath);
         }
     }
-    async investigate(targetPath) {
-        if (!fs.existsSync(targetPath)) {
-            throw new Error(`Target investigation path does not exist: ${targetPath}`);
+    /**
+     * Probes whether REA is genuinely installed and runnable in the host environment.
+     */
+    probeReaStatus() {
+        // 1. Check if 'rea' CLI binary is in PATH
+        let cliFound = false;
+        let cliPath = null;
+        try {
+            const probeCmd = process.platform === "win32" ? "where.exe rea" : "which rea";
+            const stdout = execSync(probeCmd, { stdio: ["pipe", "pipe", "ignore"], encoding: "utf-8" }).trim();
+            if (stdout) {
+                cliFound = true;
+                cliPath = stdout.split(/\r?\n/)[0];
+            }
         }
-        const stat = fs.statSync(targetPath);
+        catch {
+            cliFound = false;
+        }
+        // 2. Check if local REA repository is present and built
+        let mcpFound = false;
+        let details = "";
+        if (this.reaRootPath) {
+            const reaPkgPath = path.join(this.reaRootPath, "package.json");
+            const reaNodeModules = path.join(this.reaRootPath, "node_modules");
+            const reaScript = path.join(this.reaRootPath, "scripts", "rea.mjs");
+            if (fs.existsSync(reaPkgPath)) {
+                if (!fs.existsSync(reaNodeModules)) {
+                    details = `REA repository detected at '${this.reaRootPath}', but dependencies (node_modules) are not installed. Real REA execution cannot proceed without building.`;
+                }
+                else if (fs.existsSync(reaScript)) {
+                    mcpFound = true;
+                    details = `REA repository detected at '${this.reaRootPath}' with entry script '${reaScript}'.`;
+                }
+            }
+            else {
+                details = `Path '${this.reaRootPath}' does not contain a valid REA repository package.json.`;
+            }
+        }
+        else {
+            details = cliFound
+                ? `REA CLI found in system PATH at '${cliPath}'.`
+                : "REA is not installed in PATH and no built REA repository path was configured.";
+        }
+        return {
+            cliFound,
+            mcpFound,
+            details
+        };
+    }
+    /**
+     * Investigates a target reference project or file.
+     */
+    async investigate(targetPath) {
+        const resolvedPath = path.resolve(targetPath);
+        if (!fs.existsSync(resolvedPath)) {
+            throw new Error(`Target investigation path does not exist: ${resolvedPath}`);
+        }
+        const reaStatus = this.probeReaStatus();
+        // If a mock or test fixture was explicitly configured
+        if (this.customProvider === "test-fixture") {
+            return this.executeFixtureAnalysis(resolvedPath, reaStatus);
+        }
+        // If REA CLI is available in PATH, invoke genuine REA CLI
+        if (reaStatus.cliFound) {
+            try {
+                return await this.executeReaCli(resolvedPath, reaStatus);
+            }
+            catch (err) {
+                // Fall back gracefully with clear diagnostic
+                return this.executeNativeForgeParser(resolvedPath, reaStatus, [
+                    `REA CLI failed during analysis: ${err.message}. Gracefully degraded to native Forge parser.`
+                ]);
+            }
+        }
+        // If REA is unavailable, run native Forge source parser truthfully
+        return this.executeNativeForgeParser(resolvedPath, reaStatus);
+    }
+    /**
+     * Native Forge source code parser.
+     * Parses Prisma schemas, SQL DDL, and TypeScript/JavaScript route files.
+     */
+    executeNativeForgeParser(targetPath, reaStatus, additionalWarnings = []) {
         const evidence = [];
         const suggestedEntities = [];
         const suggestedOperations = [];
+        const warnings = [...additionalWarnings];
+        if (!reaStatus.cliFound && !reaStatus.mcpFound) {
+            warnings.push("REA is not installed or unbuilt. Results produced strictly via native Forge AST/heuristic parser.");
+        }
         // 1. Inspect Prisma schemas or SQL files
         const schemaFiles = this.findFiles(targetPath, [".prisma", ".sql"]);
         for (const file of schemaFiles) {
             const content = fs.readFileSync(file, "utf-8");
-            const modelMatches = [...content.matchAll(/model\s+(\w+)\s*\{/g)];
-            for (const m of modelMatches) {
+            // Prisma models
+            const prismaMatches = [...content.matchAll(/model\s+(\w+)\s*\{/g)];
+            for (const m of prismaMatches) {
                 suggestedEntities.push(m[1]);
             }
-            evidence.push({
-                sourcePath: file,
-                kind: "schema",
-                findings: { modelsFound: modelMatches.map((m) => m[1]) },
-                confidence: 0.95
-            });
+            // SQL CREATE TABLE
+            const sqlMatches = [...content.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"']?\w+[`"']?)/gi)];
+            for (const m of sqlMatches) {
+                const tableName = m[1].replace(/[`"']/g, "");
+                suggestedEntities.push(tableName);
+            }
+            if (prismaMatches.length > 0 || sqlMatches.length > 0) {
+                evidence.push({
+                    sourcePath: file,
+                    kind: "schema",
+                    findings: {
+                        prismaModels: prismaMatches.map((m) => m[1]),
+                        sqlTables: sqlMatches.map((m) => m[1].replace(/[`"']/g, ""))
+                    },
+                    confidence: 0.95
+                });
+            }
         }
         // 2. Inspect route & API controllers
         const apiFiles = this.findFiles(targetPath, [".ts", ".js", ".json"]);
         for (const file of apiFiles) {
             const basename = path.basename(file).toLowerCase();
-            if (basename.includes("route") || basename.includes("controller") || basename.includes("api")) {
+            if (basename.includes("route") || basename.includes("controller") || basename.includes("api") || basename.includes("operations")) {
                 const content = fs.readFileSync(file, "utf-8");
-                const funcMatches = [...content.matchAll(/(?:get|post|put|delete|patch)(\w+)/gi)];
+                const funcMatches = [...content.matchAll(/(?:get|post|put|delete|patch|query|action|create|update|remove|find|list)(\w+)/gi)];
                 for (const m of funcMatches) {
                     suggestedOperations.push(m[0]);
                 }
-                evidence.push({
-                    sourcePath: file,
-                    kind: "routes",
-                    findings: { endpointsFound: funcMatches.map((m) => m[0]) },
-                    confidence: 0.85
-                });
+                if (funcMatches.length > 0) {
+                    evidence.push({
+                        sourcePath: file,
+                        kind: "routes",
+                        findings: { endpointsFound: funcMatches.map((m) => m[0]) },
+                        confidence: 0.85
+                    });
+                }
             }
         }
         return {
             isAvailable: true,
-            provider: this.reaRootPath ? "rea-native" : "forge-heuristic",
+            reaAvailable: false,
+            provider: "forge-source-parser",
             evidence,
             suggestedEntities: Array.from(new Set(suggestedEntities)),
-            suggestedOperations: Array.from(new Set(suggestedOperations))
+            suggestedOperations: Array.from(new Set(suggestedOperations)),
+            reaStatus,
+            warnings: warnings.length > 0 ? warnings : undefined
         };
+    }
+    /**
+     * Invokes real REA CLI when present.
+     */
+    async executeReaCli(targetPath, reaStatus) {
+        const output = execSync(`rea "${targetPath}" --json`, {
+            encoding: "utf-8",
+            timeout: 15000,
+            stdio: ["pipe", "pipe", "pipe"]
+        });
+        const parsed = JSON.parse(output);
+        return {
+            isAvailable: true,
+            reaAvailable: true,
+            provider: "rea-cli",
+            evidence: parsed.evidence || [],
+            suggestedEntities: parsed.entities || [],
+            suggestedOperations: parsed.operations || [],
+            reaStatus
+        };
+    }
+    /**
+     * Evaluates recorded REA test fixtures for deterministic testing.
+     */
+    executeFixtureAnalysis(targetPath, reaStatus) {
+        return {
+            isAvailable: true,
+            reaAvailable: true,
+            provider: "test-fixture",
+            evidence: [
+                {
+                    sourcePath: targetPath,
+                    kind: "binary-structure",
+                    findings: { format: "ELF/Mach-O/PE", exportedSymbols: ["task_create", "task_list"] },
+                    confidence: 0.99
+                }
+            ],
+            suggestedEntities: ["TaskRecord", "TaskSession"],
+            suggestedOperations: ["task_create", "task_list", "task_close"],
+            reaStatus
+        };
+    }
+    setProviderForTesting(provider) {
+        this.customProvider = provider;
     }
     findFiles(dir, extensions) {
         const results = [];
         try {
+            const stat = fs.statSync(dir);
+            if (stat.isFile()) {
+                if (extensions.some((ext) => dir.endsWith(ext))) {
+                    return [dir];
+                }
+                return [];
+            }
             const entries = fs.readdirSync(dir, { withFileTypes: true });
             for (const entry of entries) {
                 const full = path.join(dir, entry.name);
                 if (entry.isDirectory()) {
-                    if (!["node_modules", ".git", "dist", ".wasp"].includes(entry.name)) {
+                    if (!["node_modules", ".git", "dist", ".wasp", "coverage"].includes(entry.name)) {
                         results.push(...this.findFiles(full, extensions));
                     }
                 }

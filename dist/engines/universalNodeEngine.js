@@ -5,7 +5,7 @@ export class UniversalNodeEngine {
     }
     async generate(spec, _targetDirectory) {
         const files = [];
-        // 1. package.json
+        // 1. package.json (Zero external dependencies required - runs natively on Node 22+)
         const packageJson = {
             name: spec.name,
             version: "1.0.0",
@@ -14,115 +14,175 @@ export class UniversalNodeEngine {
                 dev: "node server.js",
                 start: "node server.js",
                 test: "node test.js"
-            },
-            dependencies: {
-                express: "^4.21.2",
-                cors: "^2.8.5"
             }
         };
         files.push({
             relativePath: "package.json",
             content: JSON.stringify(packageJson, null, 2) + "\n"
         });
-        // 2. server.js (Express REST API + Static Frontend Serving + JSON DB storage)
-        const serverJs = `import express from "express";
-import cors from "cors";
+        // 2. server.js (Zero-dependency Node HTTP + Native SQLite DB storage)
+        const serverJs = `import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_FILE = path.join(__dirname, "data.json");
+const DB_FILE = path.join(__dirname, "app.db");
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+// Persistent SQLite Storage Setup with WAL mode
+export const db = new DatabaseSync(DB_FILE);
+db.exec("PRAGMA journal_mode = WAL;");
+db.exec(\`
+  CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    isDone INTEGER NOT NULL DEFAULT 0,
+    createdAt TEXT NOT NULL
+  );
+\`);
 
-// Persistent JSON Storage Manager
-function loadData() {
-  if (!fs.existsSync(DB_FILE)) {
-    const initial = {
-      tasks: [
-        { id: 1, title: "Welcome to ${spec.title}", isDone: false, createdAt: new Date().toISOString() },
-        { id: 2, title: "Verify persistent storage", isDone: true, createdAt: new Date().toISOString() }
-      ]
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initial, null, 2));
-    return initial;
-  }
-  try {
-    return JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
-  } catch {
-    return { tasks: [] };
-  }
+// Seed default tasks if empty
+const countRow = db.prepare("SELECT COUNT(*) AS count FROM tasks").get();
+if (countRow.count === 0) {
+  const seed = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, ?, ?)");
+  seed.run("Welcome to ${spec.title}", 0, new Date().toISOString());
+  seed.run("Verify persistent SQLite storage", 1, new Date().toISOString());
 }
 
-function saveData(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+export const server = http.createServer(async (req, res) => {
+  const parsedUrl = new URL(req.url, \`http://\${req.headers.host || "localhost"}\`);
+  const pathname = parsedUrl.pathname;
+  const method = req.method;
+
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // Health check
+  if (method === "GET" && pathname === "/api/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", app: "${spec.name}", storage: "sqlite", timestamp: new Date().toISOString() }));
+    return;
+  }
+
+  // GET /api/tasks
+  if (method === "GET" && pathname === "/api/tasks") {
+    try {
+      const tasks = db.prepare("SELECT id, title, (isDone = 1) AS isDone, createdAt FROM tasks ORDER BY id ASC").all();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(tasks));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // Helper to read JSON request body
+  const readBody = () => new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch (err) {
+        reject(err);
+      }
+    });
+    req.on("error", reject);
+  });
+
+  // POST /api/tasks
+  if (method === "POST" && pathname === "/api/tasks") {
+    try {
+      const data = await readBody();
+      if (!data.title || typeof data.title !== "string" || !data.title.trim()) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Title is required" }));
+        return;
+      }
+      const createdAt = new Date().toISOString();
+      const info = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, 0, ?)").run(data.title.trim(), createdAt);
+      res.writeHead(201, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ id: Number(info.lastInsertRowid), title: data.title.trim(), isDone: false, createdAt }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON or database error" }));
+    }
+    return;
+  }
+
+  // PATCH /api/tasks/:id
+  const patchMatch = pathname.match(/^\\/api\\/tasks\\/(\\d+)$/);
+  if (method === "PATCH" && patchMatch) {
+    try {
+      const id = parseInt(patchMatch[1], 10);
+      const existing = db.prepare("SELECT id, title, (isDone = 1) AS isDone, createdAt FROM tasks WHERE id = ?").get(id);
+      if (!existing) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Task not found" }));
+        return;
+      }
+      const data = await readBody();
+      const isDoneVal = data.isDone !== undefined ? (data.isDone ? 1 : 0) : (existing.isDone ? 1 : 0);
+      const titleVal = data.title !== undefined ? String(data.title).trim() : existing.title;
+      db.prepare("UPDATE tasks SET title = ?, isDone = ? WHERE id = ?").run(titleVal, isDoneVal, id);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ id, title: titleVal, isDone: Boolean(isDoneVal), createdAt: existing.createdAt }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // DELETE /api/tasks/:id
+  const deleteMatch = pathname.match(/^\\/api\\/tasks\\/(\\d+)$/);
+  if (method === "DELETE" && deleteMatch) {
+    try {
+      const id = parseInt(deleteMatch[1], 10);
+      const info = db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+      if (info.changes === 0) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Task not found" }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, id }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // Static file serving: public/index.html
+  if (method === "GET" && (pathname === "/" || pathname === "/index.html")) {
+    const htmlPath = path.join(__dirname, "public", "index.html");
+    if (fs.existsSync(htmlPath)) {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(fs.readFileSync(htmlPath));
+      return;
+    }
+  }
+
+  res.writeHead(404, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
+});
+
+if (process.env.NODE_ENV !== "test") {
+  server.listen(PORT, () => {
+    console.log(\`Server listening at http://localhost:\${PORT}\`);
+  });
 }
-
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", app: "${spec.name}", timestamp: new Date().toISOString() });
-});
-
-// GET /api/tasks
-app.get("/api/tasks", (req, res) => {
-  const data = loadData();
-  res.json(data.tasks);
-});
-
-// POST /api/tasks
-app.post("/api/tasks", (req, res) => {
-  const { title } = req.body;
-  if (!title || !title.trim()) {
-    return res.status(400).json({ error: "Title is required" });
-  }
-  const data = loadData();
-  const newTask = {
-    id: Date.now(),
-    title: title.trim(),
-    isDone: false,
-    createdAt: new Date().toISOString()
-  };
-  data.tasks.push(newTask);
-  saveData(data);
-  res.status(201).json(newTask);
-});
-
-// PATCH /api/tasks/:id
-app.patch("/api/tasks/:id", (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const { isDone, title } = req.body;
-  const data = loadData();
-  const task = data.tasks.find((t) => t.id === id);
-  if (!task) {
-    return res.status(404).json({ error: "Task not found" });
-  }
-  if (isDone !== undefined) task.isDone = Boolean(isDone);
-  if (title !== undefined) task.title = String(title).trim();
-  saveData(data);
-  res.json(task);
-});
-
-// DELETE /api/tasks/:id
-app.delete("/api/tasks/:id", (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const data = loadData();
-  const initialLength = data.tasks.length;
-  data.tasks = data.tasks.filter((t) => t.id !== id);
-  if (data.tasks.length === initialLength) {
-    return res.status(404).json({ error: "Task not found" });
-  }
-  saveData(data);
-  res.json({ success: true, id });
-});
-
-app.listen(PORT, () => {
-  console.log(\`Server listening at http://localhost:\${PORT}\`);
-});
 `;
         files.push({
             relativePath: "server.js",
@@ -131,15 +191,38 @@ app.listen(PORT, () => {
         // 3. Automated Verification Test Suite (test.js)
         const testJs = `import assert from "node:assert/strict";
 import fs from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 
 console.log("Running self-verification tests for ${spec.name}...");
 
-// Verify basic structure
+// 1. Structural check
 assert.ok(fs.existsSync("package.json"), "package.json must exist");
 assert.ok(fs.existsSync("server.js"), "server.js must exist");
 assert.ok(fs.existsSync("public/index.html"), "public/index.html must exist");
 
-console.log("All structural verification checks PASSED.");
+// 2. Persistent SQLite Storage Verification
+const db = new DatabaseSync("app.db");
+try {
+  db.exec("PRAGMA journal_mode = WAL;");
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'").all();
+  assert.ok(tables.length > 0, "tasks table must exist in SQLite database");
+
+  // Test transaction: Insert, Query, Update, Delete
+  const insertStmt = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, ?, ?)");
+  const info = insertStmt.run("Self-test verification task", 0, new Date().toISOString());
+  assert.ok(info.lastInsertRowid > 0, "Insert transaction must succeed");
+
+  const selectStmt = db.prepare("SELECT * FROM tasks WHERE id = ?");
+  const record = selectStmt.get(info.lastInsertRowid);
+  assert.equal(record.title, "Self-test verification task", "Read-back must match inserted record");
+
+  const deleteStmt = db.prepare("DELETE FROM tasks WHERE id = ?");
+  deleteStmt.run(info.lastInsertRowid);
+} finally {
+  db.close();
+}
+
+console.log("All structural and SQLite persistence verification checks PASSED.");
 `;
         files.push({
             relativePath: "test.js",
@@ -200,7 +283,7 @@ console.log("All structural verification checks PASSED.");
 
     <div class="status-bar">
       <span id="task-count">0 tasks</span>
-      <span id="storage-status">Persistent Storage: Local SQLite/JSON</span>
+      <span id="storage-status">Persistent Storage: SQLite (WAL Mode)</span>
     </div>
   </div>
 
@@ -281,7 +364,7 @@ console.log("All structural verification checks PASSED.");
         return {
             engineName: this.name,
             files,
-            entryPointInstructions: "Run `npm install` then `npm start` (or `node server.js`) to launch at http://localhost:3000",
+            entryPointInstructions: "Run `node server.js` to launch at http://localhost:3000 (persistent SQLite backend)",
             supportedOnPlatform: true
         };
     }

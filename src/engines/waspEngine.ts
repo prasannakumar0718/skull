@@ -133,6 +133,56 @@ export const TasksPage = () => {
       content: componentContent
     });
 
+    // 5. Root package.json conforming to Wasp 0.26.1 specs
+    const waspPkg = {
+      name: spec.name,
+      version: "0.1.0",
+      private: true,
+      dependencies: {
+        "@wasp.sh/spec": "file:.wasp/spec",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+        "wasp": "file:.wasp/out/sdk/wasp"
+      },
+      devDependencies: {
+        "vite": "^5.4.14",
+        "typescript": "^5.8.2"
+      }
+    };
+    files.push({
+      relativePath: "package.json",
+      content: JSON.stringify(waspPkg, null, 2) + "\n"
+    });
+
+    // 6. tsconfig.json
+    const tsconfig = {
+      compilerOptions: {
+        target: "ES2022",
+        module: "ESNext",
+        moduleResolution: "bundler",
+        jsx: "react-jsx",
+        strict: true,
+        skipLibCheck: true
+      },
+      include: ["src/**/*", "main.wasp.ts"]
+    };
+    files.push({
+      relativePath: "tsconfig.json",
+      content: JSON.stringify(tsconfig, null, 2) + "\n"
+    });
+
+    // 7. .env.server
+    files.push({
+      relativePath: ".env.server",
+      content: `DATABASE_URL="file:./dev.db"\nPORT=3001\n`
+    });
+
+    // 8. .gitignore
+    files.push({
+      relativePath: ".gitignore",
+      content: `node_modules/\n.wasp/\ndev.db\ndev.db-journal\ndist/\n`
+    });
+
     const isWindows = process.platform === "win32";
     return {
       engineName: this.name,
@@ -141,7 +191,9 @@ export const TasksPage = () => {
         ? "Run inside WSL: `wasp start` or compile with `wasp compile`"
         : "Run `wasp start` to launch dev server",
       supportedOnPlatform: !isWindows,
-      platformNotes: isWindows ? "Wasp CLI requires WSL on Windows hosts." : undefined
+      platformNotes: isWindows
+        ? "Wasp CLI requires Linux, macOS, or WSL on Windows hosts. Native Windows execution is not supported by upstream Wasp."
+        : undefined
     };
   }
 }

@@ -5,6 +5,7 @@ import { createSpecFromPrompt, validateForgeSpec } from "../spec/validator.js";
 import { EngineOrchestrator } from "../engines/orchestrator.js";
 import { ReaInvestigationBridge } from "../investigation/reaBridge.js";
 import { ForgeVerifier } from "../verifier/verifier.js";
+import * as path from "node:path";
 export function createForgeMcpServer(reaPath) {
     const server = new Server({
         name: "io.github.agent-app-forge/server",
@@ -68,19 +69,37 @@ export function createForgeMcpServer(reaPath) {
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
         tools
     }));
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const { name, arguments: args } = request.params;
+        if (extra?.signal?.aborted) {
+            return {
+                isError: true,
+                content: [{ type: "text", text: `Request cancelled by client for tool ${name}` }]
+            };
+        }
         try {
             if (name === "forge_inspect_reference") {
-                const refPath = String(args?.referencePath);
+                if (!args || typeof args.referencePath !== "string" || !args.referencePath.trim()) {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'referencePath' string parameter is required." }]
+                    };
+                }
+                const refPath = path.resolve(args.referencePath.trim());
                 const result = await investigationBridge.investigate(refPath);
                 return {
                     content: [{ type: "text", text: JSON.stringify(result, null, 2) }]
                 };
             }
             if (name === "forge_create_spec") {
-                const prompt = String(args?.prompt);
-                const appName = String(args?.appName || "TaskManager");
+                if (!args || typeof args.prompt !== "string" || !args.prompt.trim()) {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'prompt' string parameter is required." }]
+                    };
+                }
+                const prompt = args.prompt.trim();
+                const appName = typeof args.appName === "string" && args.appName.trim() ? args.appName.trim() : "TaskManager";
                 const spec = createSpecFromPrompt(prompt, appName);
                 const validation = validateForgeSpec(spec);
                 return {
@@ -96,8 +115,14 @@ export function createForgeMcpServer(reaPath) {
                 };
             }
             if (name === "forge_generate_app") {
-                const spec = args?.spec;
-                const outDir = String(args?.outputDirectory);
+                if (!args || !args.spec || typeof args.spec !== "object" || typeof args.outputDirectory !== "string" || !args.outputDirectory.trim()) {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'spec' object and 'outputDirectory' string parameters are required." }]
+                    };
+                }
+                const spec = args.spec;
+                const outDir = path.resolve(args.outputDirectory.trim());
                 const genResult = await orchestrator.generateProject(spec, outDir);
                 return {
                     content: [
@@ -114,15 +139,25 @@ export function createForgeMcpServer(reaPath) {
                 };
             }
             if (name === "forge_verify_app") {
-                const projDir = String(args?.projectDirectory);
+                if (!args || typeof args.projectDirectory !== "string" || !args.projectDirectory.trim()) {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'projectDirectory' string parameter is required." }]
+                    };
+                }
+                const projDir = path.resolve(args.projectDirectory.trim());
                 const report = await verifier.verify(projDir);
                 return {
                     content: [{ type: "text", text: JSON.stringify(report, null, 2) }]
                 };
             }
-            throw new Error(`Unknown tool: ${name}`);
+            return {
+                isError: true,
+                content: [{ type: "text", text: `Unknown tool: ${name}` }]
+            };
         }
         catch (err) {
+            console.error(`[MCP Tool Error] ${name}:`, err.message);
             return {
                 isError: true,
                 content: [{ type: "text", text: `Error in tool ${name}: ${err.message}` }]

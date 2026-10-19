@@ -9,6 +9,8 @@ export declare function validateForgeSpec(data: unknown): {
     result: SpecValidationResult;
 };
 /**
- * Natural language intent parser for quick prototyping
+ * Natural language intent parser for application synthesis.
+ * Supports diverse application domains: Task/Todo, Fee/Financial, E-Commerce, Blog/Publishing, and Generic.
+ * Injects explicit domain and inferred assumptions metadata.
  */
 export declare function createSpecFromPrompt(prompt: string, appName?: string): ForgeSpec;
