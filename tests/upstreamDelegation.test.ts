@@ -97,4 +97,21 @@ describe("Upstream Capability Preservation & Native Delegation Suite", () => {
       expect(output).toContain("To build REA");
     }
   }, 30000);
+
+  it("passes flags such as --version directly to REA CLI without root option collision", () => {
+    const stdout = execSync("node bin/forge.js rea --version", { encoding: "utf-8" }).trim();
+    expect(stdout).toContain("6.7.0");
+    expect(stdout).not.toBe("0.1.0");
+  }, 30000);
+
+  it("passes flags such as --version directly to Wasp CLI without root option collision", () => {
+    try {
+      execSync("node bin/forge.js wasp --version", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    } catch (err: any) {
+      const output = (err.stdout || "") + (err.stderr || "");
+      expect(output).toContain("Native Wasp Delegation");
+      expect(output).toContain("Wasp CLI is not installed or not in system PATH");
+      expect(output).not.toBe("0.1.0");
+    }
+  });
 });

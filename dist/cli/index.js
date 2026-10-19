@@ -11,7 +11,8 @@ export function createCli() {
     program
         .name("forge")
         .description("Agent App Forge: AI Coding-Agent Infrastructure for Reverse Engineering & App Synthesis")
-        .version("0.1.0");
+        .version("0.1.0")
+        .enablePositionalOptions();
     program
         .command("mcp")
         .description("Start the Agent App Forge MCP server (stdio transport)")
@@ -112,6 +113,7 @@ export function createCli() {
         .command("wasp")
         .description("Delegate commands directly to native Wasp CLI with full argument pass-through")
         .allowUnknownOption(true)
+        .passThroughOptions()
         .argument("[args...]", "Raw arguments to pass to Wasp CLI")
         .action(async (args = []) => {
         const { checkSystemPrerequisites } = await import("../utils/prerequisites.js");
@@ -134,6 +136,7 @@ export function createCli() {
         .command("rea")
         .description("Delegate commands directly to native REA CLI with full argument pass-through")
         .allowUnknownOption(true)
+        .passThroughOptions()
         .argument("[args...]", "Raw arguments to pass to REA CLI")
         .action(async (args = []) => {
         const bridge = new ReaInvestigationBridge();
