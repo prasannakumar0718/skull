@@ -112,7 +112,7 @@ export function createForgeMcpServer(reaPath) {
             // Direct collision-safe REA native tool invocation
             if (name.startsWith("rea_")) {
                 const upstreamName = name.slice(4);
-                const reaResult = await investigationBridge.callReaNativeTool(upstreamName, (args || {}));
+                const reaResult = await investigationBridge.callReaNativeTool(upstreamName, (args || {}), extra?.signal);
                 return {
                     isError: reaResult.isError,
                     content: [{ type: "text", text: JSON.stringify(reaResult.data ?? reaResult, null, 2) }]
@@ -198,7 +198,7 @@ export function createForgeMcpServer(reaPath) {
                         content: [{ type: "text", text: "Invalid arguments: 'toolName' string and 'toolArguments' object are required." }]
                     };
                 }
-                const reaResult = await investigationBridge.callReaNativeTool(args.toolName, args.toolArguments);
+                const reaResult = await investigationBridge.callReaNativeTool(args.toolName, args.toolArguments, extra?.signal);
                 return {
                     isError: reaResult.isError,
                     content: [{ type: "text", text: JSON.stringify(reaResult, null, 2) }]

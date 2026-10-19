@@ -10,6 +10,21 @@ export interface ReaStatus {
     mcpFound: boolean;
     details: string;
 }
+export interface ParityReport {
+    isMatch: boolean;
+    liveVersion: string;
+    catalogVersion: string;
+    versionMismatch: boolean;
+    liveToolCount: number;
+    catalogToolCount: number;
+    missingInCatalog: string[];
+    missingInLive: string[];
+    schemaMismatches: Array<{
+        tool: string;
+        reason: string;
+    }>;
+    verifiedAt: string;
+}
 export interface InvestigationResult {
     isAvailable: boolean;
     reaAvailable: boolean;
@@ -54,15 +69,49 @@ export declare class ReaInvestigationBridge {
      * Evaluates recorded REA test fixtures for deterministic testing.
      */
     private executeFixtureAnalysis;
+    private liveDiscoveredTools?;
     setProviderForTesting(provider?: InvestigationProvider): void;
     /**
+     * Loads the static catalog tools from reaCatalog.json.
+     */
+    loadCatalogToolsFromFile(): Array<{
+        name: string;
+        description: string;
+        inputSchema: Record<string, unknown>;
+    }>;
+    /**
      * Returns list of upstream REA tools supported by the REA contract (all 207 upstream tools).
+     * Prefers runtime-discovered live tools when available.
      */
     listSupportedReaTools(): Array<{
         name: string;
         description: string;
         inputSchema: Record<string, unknown>;
     }>;
+    /**
+     * Retrieves catalog metadata including declared version and upstream source package.
+     */
+    getCatalogMetadata(): {
+        catalogVersion: string;
+        sourcePackage: string;
+        toolCount: number;
+    };
+    /**
+     * Identifies the exact REA version launched by Forge.
+     */
+    getReaVersion(): string;
+    /**
+     * Discovers tools dynamically from the live REA MCP runtime over stdio.
+     */
+    discoverLiveReaTools(): Promise<Array<{
+        name: string;
+        description: string;
+        inputSchema: Record<string, unknown>;
+    }>>;
+    /**
+     * Performs an evidence-based schema and version parity audit against live REA.
+     */
+    validateParityWithLiveRea(): Promise<ParityReport>;
     /**
      * Executes a native REA command with full argument pass-through.
      */
@@ -75,11 +124,13 @@ export declare class ReaInvestigationBridge {
     };
     /**
      * Delegates invocation of a native REA MCP tool using the real upstream MCP interface.
+     * Supports cancellation via optional AbortSignal.
      */
-    callReaNativeTool(toolName: string, toolArgs: Record<string, unknown>): Promise<{
+    callReaNativeTool(toolName: string, toolArgs: Record<string, unknown>, abortSignal?: AbortSignal): Promise<{
         isError: boolean;
         data?: any;
         error?: string;
+        isCancelled?: boolean;
         remediation?: string;
     }>;
     /**

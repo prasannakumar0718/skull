@@ -209,13 +209,14 @@ export class ReaInvestigationBridge {
             reaStatus
         };
     }
+    liveDiscoveredTools;
     setProviderForTesting(provider) {
         this.customProvider = provider;
     }
     /**
-     * Returns list of upstream REA tools supported by the REA contract (all 207 upstream tools).
+     * Loads the static catalog tools from reaCatalog.json.
      */
-    listSupportedReaTools() {
+    loadCatalogToolsFromFile() {
         try {
             let catalogPath = path.resolve(__dirname, "reaCatalog.json");
             if (!fs.existsSync(catalogPath)) {
@@ -226,9 +227,10 @@ export class ReaInvestigationBridge {
             }
             if (fs.existsSync(catalogPath)) {
                 const raw = fs.readFileSync(catalogPath, "utf-8");
-                const catalog = JSON.parse(raw);
-                if (Array.isArray(catalog) && catalog.length > 0) {
-                    return catalog.map((t) => ({
+                const parsed = JSON.parse(raw);
+                const tools = Array.isArray(parsed) ? parsed : (parsed.tools || []);
+                if (Array.isArray(tools) && tools.length > 0) {
+                    return tools.map((t) => ({
                         name: t.name,
                         description: t.description || `Upstream REA analysis tool: ${t.name}`,
                         inputSchema: t.inputSchema || { type: "object", properties: {} }
@@ -300,6 +302,169 @@ export class ReaInvestigationBridge {
         ];
     }
     /**
+     * Returns list of upstream REA tools supported by the REA contract (all 207 upstream tools).
+     * Prefers runtime-discovered live tools when available.
+     */
+    listSupportedReaTools() {
+        if (this.liveDiscoveredTools && this.liveDiscoveredTools.length > 0) {
+            return this.liveDiscoveredTools;
+        }
+        return this.loadCatalogToolsFromFile();
+    }
+    /**
+     * Retrieves catalog metadata including declared version and upstream source package.
+     */
+    getCatalogMetadata() {
+        try {
+            let catalogPath = path.resolve(__dirname, "reaCatalog.json");
+            if (!fs.existsSync(catalogPath)) {
+                catalogPath = path.resolve(__dirname, "../src/investigation/reaCatalog.json");
+            }
+            if (!fs.existsSync(catalogPath)) {
+                catalogPath = path.resolve(process.cwd(), "src/investigation/reaCatalog.json");
+            }
+            if (fs.existsSync(catalogPath)) {
+                const raw = fs.readFileSync(catalogPath, "utf-8");
+                const parsed = JSON.parse(raw);
+                if (!Array.isArray(parsed) && parsed.catalogVersion) {
+                    return {
+                        catalogVersion: parsed.catalogVersion,
+                        sourcePackage: parsed.sourcePackage || "rea-agents",
+                        toolCount: Array.isArray(parsed.tools) ? parsed.tools.length : 207
+                    };
+                }
+            }
+        }
+        catch { }
+        return {
+            catalogVersion: "6.7.0",
+            sourcePackage: "rea-agents",
+            toolCount: 207
+        };
+    }
+    /**
+     * Identifies the exact REA version launched by Forge.
+     */
+    getReaVersion() {
+        const reaStatus = this.probeReaStatus();
+        try {
+            if (reaStatus.cliFound) {
+                return execSync("rea --version", { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+            }
+            if (this.reaRootPath) {
+                const pkgPath = path.join(this.reaRootPath, "package.json");
+                if (fs.existsSync(pkgPath)) {
+                    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+                    if (pkg.version)
+                        return pkg.version;
+                }
+            }
+            const probeCmd = process.platform === "win32" ? "npx.cmd --yes rea-agents@6.7.0 --version" : "npx --yes rea-agents@6.7.0 --version";
+            return execSync(probeCmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+        }
+        catch {
+            return "6.7.0";
+        }
+    }
+    /**
+     * Discovers tools dynamically from the live REA MCP runtime over stdio.
+     */
+    async discoverLiveReaTools() {
+        const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+        const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
+        let cmd;
+        let args;
+        if (this.reaRootPath && fs.existsSync(path.join(this.reaRootPath, "dist", "mcp", "main.js"))) {
+            cmd = process.execPath;
+            args = [path.join(this.reaRootPath, "scripts", "rea.mjs"), "--mcp"];
+        }
+        else {
+            const probeCmd = process.platform === "win32" ? "where.exe rea" : "which rea";
+            let hasGlobalRea = false;
+            try {
+                execSync(probeCmd, { stdio: ["pipe", "pipe", "ignore"] });
+                hasGlobalRea = true;
+            }
+            catch { }
+            if (hasGlobalRea) {
+                cmd = "rea";
+                args = ["--mcp"];
+            }
+            else {
+                cmd = process.platform === "win32" ? "npx.cmd" : "npx";
+                args = ["--yes", "rea-agents@6.7.0", "--mcp"];
+            }
+        }
+        const transport = new StdioClientTransport({ command: cmd, args });
+        const client = new Client({ name: "forge-live-discoverer", version: "1.0.0" }, { capabilities: {} });
+        try {
+            await client.connect(transport);
+            const res = await client.listTools();
+            const discovered = res.tools.map((t) => ({
+                name: t.name,
+                description: t.description || `Upstream REA analysis tool: ${t.name}`,
+                inputSchema: (t.inputSchema || { type: "object", properties: {} })
+            }));
+            this.liveDiscoveredTools = discovered;
+            return discovered;
+        }
+        finally {
+            try {
+                await client.close();
+            }
+            catch { }
+        }
+    }
+    /**
+     * Performs an evidence-based schema and version parity audit against live REA.
+     */
+    async validateParityWithLiveRea() {
+        const liveTools = await this.discoverLiveReaTools();
+        const liveVersion = this.getReaVersion();
+        const catalogMeta = this.getCatalogMetadata();
+        const catalogTools = this.loadCatalogToolsFromFile();
+        const liveMap = new Map(liveTools.map(t => [t.name, t]));
+        const catalogMap = new Map(catalogTools.map(t => [t.name, t]));
+        const missingInCatalog = [];
+        const missingInLive = [];
+        const schemaMismatches = [];
+        for (const [name, liveTool] of liveMap) {
+            if (!catalogMap.has(name)) {
+                missingInCatalog.push(name);
+            }
+            else {
+                const catTool = catalogMap.get(name);
+                const liveSchema = JSON.stringify(liveTool.inputSchema);
+                const catSchema = JSON.stringify(catTool.inputSchema);
+                if (liveSchema !== catSchema) {
+                    schemaMismatches.push({
+                        tool: name,
+                        reason: "Input schema JSON structure differs from live REA"
+                    });
+                }
+            }
+        }
+        for (const [name] of catalogMap) {
+            if (!liveMap.has(name)) {
+                missingInLive.push(name);
+            }
+        }
+        const versionMismatch = liveVersion !== catalogMeta.catalogVersion;
+        const isMatch = missingInCatalog.length === 0 && missingInLive.length === 0 && schemaMismatches.length === 0;
+        return {
+            isMatch,
+            liveVersion,
+            catalogVersion: catalogMeta.catalogVersion,
+            versionMismatch,
+            liveToolCount: liveTools.length,
+            catalogToolCount: catalogTools.length,
+            missingInCatalog,
+            missingInLive,
+            schemaMismatches,
+            verifiedAt: new Date().toISOString()
+        };
+    }
+    /**
      * Executes a native REA command with full argument pass-through.
      */
     executeReaCliCommand(args) {
@@ -337,8 +502,16 @@ export class ReaInvestigationBridge {
     }
     /**
      * Delegates invocation of a native REA MCP tool using the real upstream MCP interface.
+     * Supports cancellation via optional AbortSignal.
      */
-    async callReaNativeTool(toolName, toolArgs) {
+    async callReaNativeTool(toolName, toolArgs, abortSignal) {
+        if (abortSignal?.aborted) {
+            return {
+                isError: true,
+                isCancelled: true,
+                error: "Operation cancelled by client signal before execution."
+            };
+        }
         // If test fixture mode is set
         if (this.customProvider === "test-fixture") {
             return {
@@ -352,7 +525,7 @@ export class ReaInvestigationBridge {
             };
         }
         try {
-            const res = await this.invokeReaMcpTool(toolName, toolArgs);
+            const res = await this.invokeReaMcpTool(toolName, toolArgs, abortSignal);
             const isErr = res.isError ?? false;
             let errMsg = undefined;
             if (isErr) {
@@ -370,6 +543,13 @@ export class ReaInvestigationBridge {
             };
         }
         catch (err) {
+            if (abortSignal?.aborted) {
+                return {
+                    isError: true,
+                    isCancelled: true,
+                    error: "Operation cancelled by client signal during execution."
+                };
+            }
             return {
                 isError: true,
                 error: err.message || `Failed to execute native REA tool '${toolName}'`,
@@ -380,7 +560,7 @@ export class ReaInvestigationBridge {
     /**
      * Directly invokes the real upstream REA MCP server via StdioClientTransport.
      */
-    async invokeReaMcpTool(toolName, toolArgs) {
+    async invokeReaMcpTool(toolName, toolArgs, abortSignal) {
         const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
         const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
         let cmd;
@@ -414,8 +594,23 @@ export class ReaInvestigationBridge {
             name: "forge-rea-delegator",
             version: "0.1.0"
         }, { capabilities: {} });
+        if (abortSignal?.aborted) {
+            throw new Error("Operation cancelled prior to transport connection.");
+        }
+        const onAbort = () => {
+            try {
+                client.close();
+            }
+            catch { }
+        };
+        if (abortSignal) {
+            abortSignal.addEventListener("abort", onAbort, { once: true });
+        }
         try {
             await client.connect(transport);
+            if (abortSignal?.aborted) {
+                throw new Error("Operation cancelled after transport connection.");
+            }
             const res = await client.callTool({
                 name: toolName,
                 arguments: toolArgs
@@ -423,6 +618,9 @@ export class ReaInvestigationBridge {
             return res;
         }
         finally {
+            if (abortSignal) {
+                abortSignal.removeEventListener("abort", onAbort);
+            }
             try {
                 await client.close();
             }
