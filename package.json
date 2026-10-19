@@ -1,0 +1,37 @@
+{
+  "name": "agent-app-forge",
+  "version": "0.1.0",
+  "description": "Integration layer connecting REA reverse-engineering with declarative web application generation and autonomous self-repair.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "forge": "bin/forge.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "mcp": "node bin/mcp.js",
+    "forge": "node bin/forge.js"
+  },
+  "keywords": [
+    "ai-agent",
+    "reverse-engineering",
+    "app-generation",
+    "mcp",
+    "wasp",
+    "rea"
+  ],
+  "author": "Agent App Forge Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "commander": "^13.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}
