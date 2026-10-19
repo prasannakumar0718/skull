@@ -1,0 +1,45 @@
+name: Agent App Forge CI
+
+on:
+  push:
+    branches: [ master, main, 'feat/**' ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        node-version: [ 22.x, 24.x ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript & Catalog
+        run: npm run build
+
+      - name: Verify CLI Doctor
+        run: node bin/forge.js doctor
+
+      - name: Verify CLI Capabilities
+        run: node bin/forge.js capabilities --json
+
+      - name: Verify Adapter List
+        run: node bin/forge.js adapters list --json
+
+      - name: Run Test Suite
+        run: npm test

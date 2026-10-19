@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "agent-app-forge": {
+      "command": "npx",
+      "args": ["-y", "agent-app-forge", "mcp"],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

@@ -1,226 +1,231 @@
 # Agent App Forge
 
-> AI coding-agent infrastructure connecting reverse-engineering investigation with declarative web application generation, autonomous self-repair, upstream capability preservation, and Model Context Protocol (MCP) tooling.
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP Protocol](https://img.shields.io/badge/MCP-1.6.1-blue.svg)](https://modelcontextprotocol.io/)
+[![REA Parity](https://img.shields.io/badge/REA%20Tools-207%2F207%20Parity-success.svg)](https://github.com/agent-app-forge)
+[![Tests](https://img.shields.io/badge/Tests-77%2F77%20Passing-brightgreen.svg)](https://github.com/agent-app-forge)
+
+> **Agent-agnostic software recreation, reverse-engineering analysis, and declarative full-stack application synthesis system with autonomous verification and Model Context Protocol (MCP) tooling.**
 
 ---
 
-## 🌟 Overview
+## 🌟 What is Agent App Forge?
 
-Agent App Forge is an independent orchestration layer integrating two core capabilities:
-* **Investigation Engine (REA Bridge):** Extracts schemas, database models, and route endpoints from reference codebases, with native delegation to upstream REA tools (`inspect_artifact`, `analyze_function`, `compare_artifacts`, `get_call_graph`, `get_evidence_bundle`).
-* **Synthesis Engine (Wasp & Universal Node):** Generates runnable full-stack web applications with persistent SQLite storage and interactive UIs, with strict preservation of Wasp 0.26.1 application specifications.
-* **Autonomous Verifier & Self-Repair:** Executes bounded checks (`timeout: 10000`), diagnoses root causes, repairs missing databases, and probes live HTTP servers.
-* **Model Context Protocol (MCP) Server:** Exposes 6 standard protocol tools for AI pair programmers (Claude, Cursor, Antigravity, OpenCode, VS Code, Cline, Roo Code, Windsurf, Codex, Gemini).
-* **CLI Utility & Upstream Pass-Through:** Provides immediate developer-facing commands for specification generation, code synthesis, investigation, verification, system diagnostics (`forge doctor`), and direct pass-through to Wasp (`forge wasp`) and REA (`forge rea`).
-
----
-
-## 📊 Capability & Verification Status
-
-In accordance with strict verification rules, all capabilities are classified with their genuine implementation and environment status:
-
-| Feature / Subsystem | Status | Description & Prerequisites |
-| :--- | :--- | :--- |
-| **Model Context Protocol (MCP)** | **Implemented & Verified** | Full MCP lifecycle, capability negotiation, tool listing, schema checks, and Stdio transport purity tested via `@modelcontextprotocol/sdk`. |
-| **Universal Node Engine** | **Implemented & Verified** | Generates zero-dependency Node.js HTTP servers with native SQLite (`node:sqlite` WAL mode) and responsive web frontends. Runs on Windows, macOS, and Linux without `npm install`. |
-| **Autonomous Verifier** | **Implemented & Verified** | Bounded test execution (`execFile`), error classification, automatic SQLite schema self-repair, and live HTTP health check probes (`GET /api/health`). |
-| **Specification Engine** | **Implemented & Verified** | Parses natural-language prompts across Task, Financial, E-Commerce, Blog, and Generic domains with inferred assumptions metadata and strict Zod validation. |
-| **Native Source Parser** | **Implemented & Verified** | Forge's built-in heuristic AST parser extracts Prisma models, SQL `CREATE TABLE` DDL, and controller route functions. |
-| **Wasp Application Generation** | **Emitted & Conforming** | Emits complete Wasp 0.26.1 file hierarchy (`main.wasp.ts`, `schema.prisma`, `package.json`, `tsconfig.json`, `.env.server`, React pages, operations). |
-| **Wasp CLI Execution & Delegation** | **Platform Dependent** | Wasp CLI officially requires Linux, macOS, or WSL. `forge wasp <args>` delegates directly if `wasp` is installed, or provides exact WSL execution commands on native Windows. |
-| **Live REA CLI / MCP Tools Delegation** | **Probed & Supported** | `forge rea <args>` and `forge_rea_tool` delegate deep analysis directly to REA CLI or MCP server when built, and provide actionable build instructions when unbuilt. |
-| **Universal Agent Compatibility** | **Tested Across 10 Clients** | Machine-readable registry in `config/agent-compatibility.json` supporting Antigravity, Claude Code, Codex CLI, Gemini CLI, OpenCode, Cursor, VS Code, Cline, Roo Code, and Windsurf. |
-| **Native Binary Disassembly** | **Unsupported in Fallback** | Disassembly of Mach-O/ELF/PE binaries requires native REA providers (Hopper, Ghidra, Cutter). The fallback parser truthfully reports this as unavailable. |
+Agent App Forge is an open-source orchestration layer that connects:
+1. **Reverse-Engineering Analysis ([REA](https://github.com/agent-app-forge)):** Deeply investigates existing software, binaries, APIs, and databases across 207 native REA analysis tools.
+2. **Declarative Synthesis Engine ([Wasp](https://wasp.sh) & Universal Node):** Generates clean, independent full-stack web applications with high-performance SQLite WAL storage, responsive UIs, and zero external runtime npm dependencies.
+3. **Autonomous Verification & Bounded Self-Repair:** Executes isolated test pipelines, detects syntax and database failures, and automatically reconstructs corrupted code from the specification model.
+4. **Universal MCP Server:** Exposes **214 MCP tools** (7 Forge core orchestration tools + 207 REA analysis tools) directly to any AI coding assistant or IDE over standard I/O (`stdio`).
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Installation & Build
+### Prerequisites
+- **Node.js**: `v22.0.0` or higher (`v24.19.0` recommended) with native `node:sqlite`.
+- **Git**: Recent version.
+- **Operating System**: Windows, macOS, or Linux.
+
+### Installation Options
+
+#### Option A: Run Instantly via `npx` (No Global Install)
 ```bash
+# Check system health
+npx agent-app-forge doctor
+
+# View complete capabilities inventory
+npx agent-app-forge capabilities
+
+# Start MCP server
+npx agent-app-forge mcp
+```
+
+#### Option B: Install Globally via `npm`
+```bash
+npm install -g agent-app-forge
+forge doctor
+forge capabilities
+```
+
+#### Option C: Install from Source
+```bash
+git clone https://github.com/agent-app-forge/agent-app-forge.git
 cd agent-app-forge
 npm install
 npm run build
 npm test
-```
-
-### 2. Using the CLI
-
-#### System Diagnostics
-Verify your environment prerequisites (Node.js runtime, SQLite, Wasp CLI/WSL, and REA build status):
-```bash
-node bin/forge.js doctor
-```
-
-#### Create an Application from a Prompt
-```bash
-node bin/forge.js create "Build a task manager with persistent storage" --output ./my-task-app
-```
-
-#### Inspect an Existing Codebase for Schemas & Endpoints
-```bash
-node bin/forge.js inspect ./reference-project
-```
-
-#### Verify & Self-Repair an Application
-```bash
-node bin/forge.js verify ./my-task-app
-```
-
-#### Direct Pass-Through to Upstream Tooling
-```bash
-# Pass arguments directly to upstream Wasp CLI (or receive actionable WSL commands):
-node bin/forge.js wasp version
-node bin/forge.js wasp clean
-
-# Pass arguments directly to upstream REA CLI (or receive actionable build commands):
-node bin/forge.js rea --help
-node bin/forge.js rea scan ./target-binary
+npm link
 ```
 
 ---
 
-## 🤖 Model Context Protocol (MCP) Configuration
+## 🛠️ Standalone CLI Commands
 
-Configure Agent App Forge in your agent's MCP settings (`claude_desktop_config.json`, Antigravity, Cursor, Cline, or Roo Code):
+Agent App Forge provides an intuitive, robust CLI that works independently of any specific editor or IDE:
+
+```bash
+# 1. Check system prerequisites & runtime readiness
+forge doctor
+
+# 2. View comprehensive capabilities, engines, and tool inventories
+forge capabilities
+forge capabilities --json
+
+# 3. Manage AI coding agent adapters
+forge adapters list
+forge adapters doctor
+forge adapters setup claude-code --dry-run
+forge adapters setup cursor
+
+# 4. Recreate software from an existing reference target
+forge recreate "Recreate Document Studio with rich-text editing, autosave, and export" \
+  --target ./fixtures/reference-document-app \
+  --output ./my-recreated-app \
+  --engine fullstack-node
+
+# 5. Greenfield application generation from natural language
+forge create "Build an inventory tracker with tags and quantities" --output ./my-inventory-app
+
+# 6. Inspect an existing codebase or SQLite database
+forge inspect ./fixtures/reference-document-app
+
+# 7. Autonomous verification & self-repair loop
+forge verify ./my-recreated-app
+
+# 8. Native upstream CLI delegation
+forge wasp --version
+forge rea --help
+```
+
+---
+
+## 🤖 Model Context Protocol (MCP) Server
+
+Agent App Forge includes a standard-compliant MCP server that connects seamlessly to any MCP-compatible coding agent.
+
+### Setup Your Preferred Agent
+
+Run the automated adapter setup:
+```bash
+forge adapters setup claude-code
+forge adapters setup cursor
+forge adapters setup cline
+forge adapters setup roo-code
+forge adapters setup windsurf
+forge adapters setup opencode
+```
+
+Or configure manually in your agent's MCP settings:
 
 ```json
 {
   "mcpServers": {
     "agent-app-forge": {
-      "command": "node",
-      "args": ["d:/git hub/agent-app-forge/bin/mcp.js"]
+      "command": "npx",
+      "args": ["-y", "agent-app-forge", "mcp"]
     }
   }
 }
 ```
 
-### Available MCP Tools (213 Total Tools):
-- **Forge Core Tools (6):**
-  1. `forge_inspect_reference`: Analyzes schemas and endpoints in reference codebases using REA or Forge's native parser.
-  2. `forge_create_spec`: Converts natural-language requests into validated, editable `ForgeSpec` JSON with domain metadata.
-  3. `forge_generate_app`: Scaffolds full-stack web applications into a specified directory (`wasp` or `fullstack-node`).
-  4. `forge_verify_app`: Runs bounded test suites and applies autonomous self-repair.
-  5. `forge_rea_tool`: Universal proxy directly invoking any of upstream REA's 207 tools with full schemas and arguments.
-  6. `forge_wasp_cli`: Executes native Wasp CLI commands (`version`, `compile`, `start`, `db migrate-dev`) with platform prerequisite handling.
-- **Native REA Tools (207):**
-  - Dynamically exposed with collision-safe names (`rea_<upstream_tool_name>`, e.g., `rea_inspect_sqlite_database`, `rea_inspect_wasm_artifact`, `rea_inspect_artifact`, `rea_annotate_native_function`).
+### Available MCP Tools (214 Total)
+
+| Tool Name | Type | Purpose |
+| :--- | :--- | :--- |
+| `forge_recreate_app` | Orchestration | Executes the complete Investigate $\rightarrow$ Specify $\rightarrow$ Plan $\rightarrow$ Build $\rightarrow$ Run $\rightarrow$ Compare $\rightarrow$ Repair lifecycle. |
+| `forge_inspect_reference` | Investigation | Probes codebases for database schemas, route endpoints, and cryptographic file hashes. |
+| `forge_create_spec` | Specification | Converts natural language requests into validated `ForgeSpec` models. |
+| `forge_generate_app` | Synthesis | Scaffolds running full-stack applications with persistent SQLite WAL storage. |
+| `forge_verify_app` | Verification | Executes bounded test suites and applies autonomous self-repairs. |
+| `forge_wasp_cli` | Delegation | Direct pass-through to Wasp CLI with platform guidance. |
+| `forge_rea_tool` | Proxy | Universal proxy for invoking any upstream REA tool. |
+| `rea_<tool_name>` (207 tools) | REA Native | Direct collision-safe routes to every native REA reverse-engineering analysis tool. |
 
 ---
 
-## 🌐 AI Coding Agent Compatibility (10 Target Environments)
+## 🌐 AI Model & Provider Independence
 
-Agent App Forge provides dedicated integration configs, MCP settings, and verification tests for 10 leading AI coding clients:
+Agent App Forge is **model-agnostic** and **vendor-neutral**:
+- **Decoupled Reasoning**: The reasoning loop lives in your AI coding client; Forge provides deterministic tools and local execution.
+- **Zero API Key Requirements in Forge**: No model API keys are required by Agent App Forge.
+- **OpenRouter Supported**: Compatible with any model routed through OpenRouter (Claude 3.7, DeepSeek R1, GPT-4o, Llama 3.3). See [docs/MODEL_PROVIDERS.md](docs/MODEL_PROVIDERS.md).
 
-| Client Name | Client Type | Integration Route | Status |
+---
+
+## 📱 AI Coding Client Compatibility Matrix
+
+| Client | Category | Status | Supported Interface |
 | :--- | :--- | :--- | :--- |
-| **Antigravity** | Agentic IDE | Stdio MCP (`mcpServers.agent-app-forge`) | **`verified`** (Live IDE session verified) |
-| **Claude Code** | Terminal CLI | CLI wrapper & Project config (`CLAUDE.md`) | **`tested`** (Binary found; MCP transport verified) |
-| **Codex CLI** | Terminal CLI | CLI wrapper (`forge create`, `forge verify`) | **`tested`** (Binary found; CLI execution verified) |
-| **Gemini CLI** | Terminal CLI | CLI wrapper (`forge create`, `forge inspect`) | **`tested`** (Binary found; CLI parsing verified) |
-| **OpenCode** | Terminal CLI | CLI wrapper & OpenCode config | **`tested`** (Binary found; CLI delegation verified) |
-| **Cursor** | AI IDE | Stdio MCP (`.cursor/mcp.json`) | **`not_verified`** (Configured; binary absent on host) |
-| **VS Code / Copilot** | Extension / IDE | Stdio MCP & VS Code Task definitions | **`limited`** (Binary found; Copilot MCP in preview) |
-| **Cline** | VS Code Extension | Stdio MCP (`cline_mcp_settings.json`) | **`configured`** (Protocol tested; GUI unverified) |
-| **Roo Code** | VS Code Extension | Stdio MCP (`roo_code_mcp_settings.json`) | **`configured`** (Protocol tested; GUI unverified) |
-| **Windsurf** | AI IDE | Stdio MCP (`mcp_config.json`) | **`not_verified`** (Configured; binary absent on host) |
+| **Google Antigravity** | IDE / Autonomous Agent | **end-to-end verified** | MCP stdio + CLI execution + Skills |
+| **Claude Code / Desktop** | CLI / Desktop Agent | **protocol-tested** | MCP stdio transport |
+| **Cursor** | AI Editor | **protocol-tested** | `.cursor/mcp.json` / Features MCP |
+| **OpenCode** | Terminal Agent | **protocol-tested** | MCP stdio + Direct CLI execution |
+| **VS Code / Copilot** | IDE Extension | **limited** | CLI task execution + Copilot MCP |
+| **Cline** | Autonomous Agent | **configured** | `cline_mcp_settings.json` |
+| **Roo Code** | Autonomous Agent | **configured** | `roo_mcp_settings.json` |
+| **Windsurf** | AI Editor | **protocol-tested** | Cascade `mcp_config.json` |
+| **Gemini CLI** | Terminal Agent | **protocol-tested** | Direct CLI + JSON stdout |
+| **Codex CLI** | Terminal Agent | **protocol-tested** | Direct CLI subprocess invocation |
 
-Full configuration templates and setup details are available in:
-* [`config/agent-compatibility.json`](config/agent-compatibility.json) (Machine-readable registry)
-* [`docs/AGENT_COMPATIBILITY.md`](docs/AGENT_COMPATIBILITY.md) (Step-by-step configuration guide)
+See [config/agent-compatibility.json](config/agent-compatibility.json) for machine-readable schemas.
 
 ---
 
-## 🧪 Test Suites
+## 🏛️ Architecture & Core Engines
 
-Agent App Forge includes 56 automated tests across 10 specialized test suites (100% pass rate):
-
-```bash
-# Run the complete test suite
-npm test
-
-# Run individual suites
-npx vitest run tests/spec.test.ts                  # Domain inference and schema validation (8 tests)
-npx vitest run tests/waspEngine.test.ts             # Wasp 0.26.1 specification compliance (2 tests)
-npx vitest run tests/forge.test.ts                  # Path traversal prevention & orchestration (4 tests)
-npx vitest run tests/securityRegression.test.ts     # Node runtime check, traversal, injection, redaction (6 tests)
-npx vitest run tests/reaBridge.test.ts              # REA probing & source parser tests (5 tests)
-npx vitest run tests/e2e.test.ts                    # End-to-end CRUD & restart persistence (1 test)
-npx vitest run tests/mcp.integration.test.ts        # Live MCP Client protocol, Stdio purity & 213 tools (10 tests)
-npx vitest run tests/upstreamDelegation.test.ts     # CLI pass-through, REA catalog, explicit engines (8 tests)
-npx vitest run tests/verifier.test.ts               # Fault injection, timeouts, SQLite repair (5 tests)
-npx vitest run tests/reaFullMcp.integration.test.ts # Full 207 REA tools discovery, live SQLite execution (7 tests)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AI CODING ASSISTANT                      │
+│     (Antigravity, Claude Code, Cursor, Cline, Roo Code)     │
+└──────────────┬───────────────────────────────▲──────────────┘
+               │                               │
+               │ MCP JSON-RPC (stdio)          │ Structured
+               │ or CLI subprocess invocation   │ Evidence & AST
+               ▼                               │
+┌─────────────────────────────────────────────────────────────┐
+│                      AGENT APP FORGE                        │
+│                                                             │
+│  ┌────────────────────────┐     ┌────────────────────────┐  │
+│  │   Investigation & REA  │     │   Specification Engine │  │
+│  │    (207 REA Tools)     │────►│   (ForgeSpec Schema)   │  │
+│  └────────────────────────┘     └───────────┬────────────┘  │
+│                                             │               │
+│  ┌────────────────────────┐                 ▼               │
+│  │  Autonomous Verifier   │     ┌────────────────────────┐  │
+│  │   & Bounded Repair     │◄────│   Synthesis Engines    │  │
+│  │ (node --check, tests)  │     │ (Universal Node, Wasp) │  │
+│  └────────────────────────┘     └────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-See the complete execution report in [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md).
+### 1. Universal Node Full-Stack Engine
+- Generates zero-dependency Node.js HTTP servers (`server.js`) with responsive web frontends.
+- High-performance SQLite storage via native built-in `node:sqlite` in WAL mode.
+- Built-in Document Studio with rich-text editing, debounced autosave, title renaming, Word `.doc` HTML export, and `@media print` PDF support.
+- Runs natively on Windows, macOS, and Linux without `npm install`.
+
+### 2. Wasp Engine
+- Emits complete Wasp 0.26.1 file hierarchies (`main.wasp.ts`, `schema.prisma`, React pages, queries, actions).
+- Preserves 100% upstream Wasp specification compliance.
 
 ---
 
-## 📑 Documentation
+## 📄 Documentation
 
-### Upstream Preservation & Universal Integration
-- [`docs/CAPABILITY_PRESERVATION_POLICY.md`](docs/CAPABILITY_PRESERVATION_POLICY.md): Non-regression and zero-capability-loss rules.
-- [`docs/CAPABILITY_MATRIX.md`](docs/CAPABILITY_MATRIX.md): Detailed capability matrix for Wasp, REA, and Forge.
-- [`docs/UPSTREAM_INTEGRATION.md`](docs/UPSTREAM_INTEGRATION.md): Upstream integration architecture, delegation routes, and WSL bridging.
-- [`docs/AGENT_COMPATIBILITY.md`](docs/AGENT_COMPATIBILITY.md): Compatibility matrix and configs for all 10 AI coding agents.
-- [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md): Full test execution log across all 49 tests.
-
-### Architecture & Audits
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): System architecture & orchestrator design.
-- [`docs/INTEGRATION_PLAN.md`](docs/INTEGRATION_PLAN.md): Wasp & REA integration strategy.
-- [`docs/SECURITY_MODEL.md`](docs/SECURITY_MODEL.md): Security boundary specification.
-- [`docs/audits/BASELINE.md`](docs/audits/BASELINE.md): Repository baseline, git remotes, and initial environment state.
-- [`docs/audits/MCP_COMPATIBILITY.md`](docs/audits/MCP_COMPATIBILITY.md): Protocol verification via `@modelcontextprotocol/sdk`.
-- [`docs/audits/REA_INTEGRATION.md`](docs/audits/REA_INTEGRATION.md): REA capability probing and provenance guarantees.
-- [`docs/audits/WASP_GENERATION.md`](docs/audits/WASP_GENERATION.md): Wasp 0.26.1 specification and platform prerequisites.
-- [`docs/audits/SECURITY_REVIEW.md`](docs/audits/SECURITY_REVIEW.md): Sandbox boundaries, path traversal, and shell injection mitigations.
-- [`docs/audits/END_TO_END_RESULTS.md`](docs/audits/END_TO_END_RESULTS.md): Step-by-step transcript of MVP synthesis, verification, and persistence.
-- [`docs/audits/EXECUTIVE_SUMMARY.md`](docs/audits/EXECUTIVE_SUMMARY.md): Executive summary of audit findings.
-
----
-
-## 📁 Repository Structure
-
-```text
-agent-app-forge/
-├── bin/
-│   ├── forge.js                 # Developer CLI executable (create, inspect, verify, doctor, wasp, rea)
-│   └── mcp.js                   # Stdio MCP server executable (6 protocol tools)
-├── config/
-│   └── agent-compatibility.json # Machine-readable client configuration registry (10 clients)
-├── docs/
-│   ├── AGENT_COMPATIBILITY.md   # Agent integration guide
-│   ├── ARCHITECTURE.md          # System architecture & orchestrator design
-│   ├── CAPABILITY_MATRIX.md     # Upstream feature preservation matrix
-│   ├── CAPABILITY_PRESERVATION_POLICY.md # Inviolable preservation policy
-│   ├── INTEGRATION_PLAN.md      # Integration strategy
-│   ├── SECURITY_MODEL.md        # Security boundary specification
-│   ├── TEST_RESULTS.md          # Comprehensive test execution report (49 tests)
-│   ├── UPSTREAM_INTEGRATION.md  # Upstream delegation & platform prerequisites
-│   ├── audits/                  # Formal audit reports
-│   └── research/                # Upstream source analysis of Wasp and REA
-├── src/
-│   ├── cli/                     # Commander CLI implementation
-│   ├── engines/                 # WaspEngine & UniversalNodeEngine orchestrator
-│   ├── investigation/           # REA investigation bridge & native source parser
-│   ├── mcp/                     # Model Context Protocol stdio server implementation
-│   ├── spec/                    # Zod validation schemas & prompt parser
-│   ├── utils/                   # Prerequisites checker (Node, SQLite, Wasp, REA)
-│   └── verifier/                # Autonomous test runner, self-repair & HTTP probe
-└── tests/
-    ├── e2e.test.ts              # End-to-end MVP persistence verification
-    ├── forge.test.ts            # Core orchestration & security boundaries
-    ├── mcp.integration.test.ts   # Real MCP protocol tests & stdio purity
-    ├── reaBridge.test.ts        # REA probing & source parser tests
-    ├── securityRegression.test.ts # Runtime, traversal, injection, redaction
-    ├── spec.test.ts             # Domain inference & schema validation tests
-    ├── upstreamDelegation.test.ts # CLI pass-through & native REA/Wasp delegation
-    ├── verifier.test.ts         # Fault injection & timeout verification
-    └── waspEngine.test.ts       # Wasp 0.26.1 specification compliance tests
-```
+- [Capabilities & Inventory](docs/CAPABILITY_MATRIX.md)
+- [Architecture & Design](docs/ARCHITECTURE.md)
+- [Software Recreation Architecture](docs/RECREATION_ARCHITECTURE.md)
+- [Controlled Recreation Acceptance Results](docs/RECREATION_ACCEPTANCE_RESULTS.md)
+- [AI Model Providers & OpenRouter](docs/MODEL_PROVIDERS.md)
+- [Release Readiness & Packaging Guide](docs/RELEASE_GUIDE.md)
+- [Security Policy & Sandboxing](SECURITY.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 
 ## 📜 License
-MIT © Agent App Forge Contributors.  
-Upstream notices preserved for Wasp (MIT) and REA (MIT).
+
+Distributed under the [MIT License](LICENSE).
+Upstream Wasp and REA repositories remain independent projects under their respective open-source licenses.

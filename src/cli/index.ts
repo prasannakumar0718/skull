@@ -252,5 +252,184 @@ export function createCli(): Command {
       console.log(`REA Notes       : ${prereqs.rea.notes}\n`);
     });
 
+  program
+    .command("capabilities")
+    .description("Display comprehensive inventory of engines, REA catalog tools, verifier, and agent interfaces")
+    .option("--json", "Output machine-readable JSON", false)
+    .action(async (options) => {
+      const bridge = new ReaInvestigationBridge();
+      const meta = bridge.getCatalogMetadata();
+      const reaStatus = bridge.probeReaStatus();
+      const { checkSystemPrerequisites } = await import("../utils/prerequisites.js");
+      const prereqs = checkSystemPrerequisites();
+
+      const data = {
+        name: "agent-app-forge",
+        version: "0.1.0",
+        engines: {
+          "universal-node": {
+            name: "Universal Fullstack Node Engine",
+            supported: true,
+            storage: "Native SQLite (WAL Mode)",
+            dependencies: "Zero external runtime npm packages",
+            platforms: ["win32", "darwin", "linux"],
+            features: ["Document Studio", "Task Management", "Debounced Autosave", "Multi-Format Export (HTML, Markdown, Word .doc, Print/PDF)"]
+          },
+          "wasp": {
+            name: "Wasp Web Framework Engine",
+            supported: true,
+            version: "0.26.1",
+            platforms: ["linux", "darwin", "win32-wsl"],
+            hostStatus: prereqs.wasp.installed ? "installed" : "wsl-required"
+          }
+        },
+        mcp: {
+          protocolVersion: "1.6.1",
+          transport: "stdio",
+          totalTools: 214,
+          coreTools: 7,
+          reaTools: meta.toolCount,
+          toolsList: [
+            "forge_recreate_app",
+            "forge_inspect_reference",
+            "forge_create_spec",
+            "forge_generate_app",
+            "forge_verify_app",
+            "forge_wasp_cli",
+            "forge_rea_tool",
+            `207 native REA tools (rea_<tool-name>)`
+          ]
+        },
+        recreation: {
+          workflow: "investigate -> specify -> plan -> build -> run -> compare -> detect failure -> repair -> re-verify",
+          provenanceTags: ["observed", "inferred", "user_requested", "unknown"],
+          supportedFixtures: ["source code", "sqlite databases", "REST endpoints"]
+        },
+        verifier: {
+          boundedTimeoutMs: 10000,
+          syntaxCheck: "node --check",
+          selfRepair: ["SQLite missing schema recovery", "Specification-driven source reconstruction"]
+        },
+        adapters: {
+          supportedClients: 10,
+          clients: [
+            "antigravity", "claude-code", "cursor", "opencode", "vscode-copilot",
+            "cline", "roo-code", "windsurf", "codex-cli", "gemini-cli"
+          ]
+        }
+      };
+
+      if (options.json) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      console.log("\n=== Agent App Forge Capabilities Inventory ===\n");
+      console.log(`Version: ${data.version} | Node Runtime: v${prereqs.node.version}`);
+      console.log(`MCP Tooling: ${data.mcp.totalTools} tools exposed over clean stdio (${data.mcp.coreTools} Forge core + ${data.mcp.reaTools} REA tools)`);
+      console.log("\nApplication Engines:");
+      console.log(`  • universal-node : Zero-dependency Node.js + SQLite WAL (Windows, macOS, Linux) [Active]`);
+      console.log(`  • wasp           : Wasp 0.26.1 full-stack web framework [${prereqs.wasp.installed ? "Host Ready" : "Platform Dependent (WSL)"}]`);
+      console.log("\nInvestigation & Reverse Engineering:");
+      console.log(`  • REA Catalog    : ${meta.toolCount} tools declared (REA ${meta.catalogVersion})`);
+      console.log(`  • Live REA CLI   : ${reaStatus.cliFound ? "Installed" : "Not in PATH"}`);
+      console.log(`  • Static Parsers : Prisma models, SQL DDL, Express/Node route ASTs`);
+      console.log("\nRecreation & Autonomous Repair:");
+      console.log(`  • Recreation     : Full loop (investigate -> specify -> plan -> build -> run -> compare -> repair -> re-verify)`);
+      console.log(`  • Verifier       : Bounded 10s timeout, syntax verification, schema recovery, spec-driven repair`);
+      console.log("\nAI Agent Compatibility (10 supported interfaces):");
+      console.log(`  • ${data.adapters.clients.join(", ")}`);
+      console.log("\nUse 'forge adapters list' or 'forge doctor' for detailed client environment diagnostics.\n");
+    });
+
+  const adaptersCmd = program
+    .command("adapters")
+    .description("Manage and configure AI coding agent MCP adapters");
+
+  adaptersCmd
+    .command("list")
+    .description("List all supported AI coding agents and configuration paths")
+    .option("--json", "Output machine-readable JSON", false)
+    .action(async (options) => {
+      const { listAdapters } = await import("../adapters/index.js");
+      const adapters = listAdapters();
+
+      if (options.json) {
+        console.log(JSON.stringify(adapters, null, 2));
+        return;
+      }
+
+      console.log("\n=== Supported AI Coding Agent Adapters ===\n");
+      for (const a of adapters) {
+        const check = a.isConfigured ? "✓ Configured" : (a.configExists ? "~ File Present" : "○ Not Configured");
+        console.log(`• [${a.id}] ${a.name} (${a.category})`);
+        console.log(`    Status: ${a.status} | Detection: ${check}`);
+        console.log(`    Config: ${a.configPath || "Custom or CLI"}`);
+        if (a.notes) console.log(`    Notes : ${a.notes}`);
+      }
+      console.log("\nTo configure an agent, run: forge adapters setup <client-id>\n");
+    });
+
+  adaptersCmd
+    .command("doctor")
+    .description("Check configuration file health across all supported coding agents")
+    .action(async () => {
+      const { listAdapters } = await import("../adapters/index.js");
+      const adapters = listAdapters();
+      console.log("\n=== AI Agent Adapter Health Check ===\n");
+      for (const a of adapters) {
+        const status = a.isConfigured
+          ? "ACTIVE (Forge MCP configured)"
+          : (a.configExists ? "DETECTED (Config exists, Forge not added)" : "NOT DETECTED (No config file at default path)");
+        console.log(`${a.name.padEnd(28)} : ${status}`);
+        if (a.configPath) {
+          console.log(`  Path: ${a.configPath}`);
+        }
+      }
+      console.log("");
+    });
+
+  adaptersCmd
+    .command("setup <client>")
+    .description("Safely configure Agent App Forge MCP server for a specific client")
+    .option("--dry-run", "Preview changes without writing to configuration file", false)
+    .option("--force", "Overwrite existing Forge configuration if present", false)
+    .option("--custom-path <path>", "Specify custom configuration file path")
+    .action(async (client, options) => {
+      const { setupAdapter } = await import("../adapters/index.js");
+      const result = await setupAdapter(client, {
+        dryRun: options.dryRun,
+        force: options.force,
+        customPath: options.customPath
+      });
+
+      console.log(`\n=== Setup Adapter: ${client} ===\n`);
+      if (result.dryRun) {
+        console.log("[DRY-RUN MODE: No files were modified]");
+        console.log(`Target Path: ${result.targetConfigPath}`);
+        console.log("\nProposed Configuration Diff:");
+        console.log(result.diff);
+        return;
+      }
+
+      if (!result.success) {
+        console.error(`Error: ${result.error}`);
+        console.log("\n" + result.manualInstructions);
+        process.exit(1);
+      }
+
+      if (result.actionTaken === "already_configured") {
+        console.log(`Agent '${client}' is already configured for Agent App Forge at: ${result.targetConfigPath}`);
+        console.log("Use --force to re-apply configuration.");
+      } else {
+        console.log(`Successfully ${result.actionTaken} configuration at: ${result.targetConfigPath}`);
+        if (result.backupPath) {
+          console.log(`Backup created at: ${result.backupPath}`);
+        }
+      }
+      console.log("\nNext Steps:");
+      console.log(`Restart ${client} to connect to the Agent App Forge MCP server.`);
+    });
+
   return program;
 }

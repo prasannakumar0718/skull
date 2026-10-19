@@ -1,26 +1,44 @@
 {
   "name": "agent-app-forge",
   "version": "0.1.0",
-  "description": "Integration layer connecting REA reverse-engineering with declarative web application generation and autonomous self-repair.",
+  "description": "Agent-agnostic software recreation, reverse engineering, and declarative full-stack application synthesis system with autonomous verification and MCP tooling.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "forge": "bin/forge.js"
+    "forge": "bin/forge.js",
+    "agent-app-forge": "bin/forge.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "config",
+    "templates",
+    "src/investigation/reaCatalog.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
   },
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs'); fs.mkdirSync('dist/investigation', {recursive:true}); fs.copyFileSync('src/investigation/reaCatalog.json', 'dist/investigation/reaCatalog.json');\"",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false",
     "mcp": "node bin/mcp.js",
-    "forge": "node bin/forge.js"
+    "forge": "node bin/forge.js",
+    "prepack": "npm run build"
   },
   "keywords": [
     "ai-agent",
     "reverse-engineering",
+    "software-recreation",
     "app-generation",
     "mcp",
+    "model-context-protocol",
     "wasp",
-    "rea"
+    "rea",
+    "sqlite",
+    "self-repair"
   ],
   "author": "Agent App Forge Contributors",
   "license": "MIT",
