@@ -1,0 +1,75 @@
+{
+  "tarballPath": "D:\\git hub\\agent-app-forge\\agent-app-forge-0.1.0.tgz",
+  "tarballSize": 1171504,
+  "isolatedDir": "C:\\Users\\PRASAN~1\\AppData\\Local\\Temp\\forge-pkg-verify-jvJXQi",
+  "cliChecks": {
+    "forgeHelp": true,
+    "forgeDoctor": true,
+    "forgeCapabilities": {
+      "name": "agent-app-forge",
+      "version": "0.1.0",
+      "mcpCoreTools": 9,
+      "reaTools": 207
+    },
+    "forgeAdapters": true
+  },
+  "mcpChecks": {
+    "toolCount": 9,
+    "toolNames": [
+      "forge_capabilities",
+      "forge_inspect_reference",
+      "forge_create_spec",
+      "forge_recreate_app",
+      "forge_generate_app",
+      "forge_verify_app",
+      "forge_rea_discover",
+      "forge_rea_tool",
+      "forge_wasp_cli"
+    ],
+    "isCompact": true,
+    "forgeCapabilities": false,
+    "reaDiscovery": {
+      "query": "sqlite",
+      "matchCount": 1,
+      "hasSqliteInspect": true
+    },
+    "reaToolExecution": {
+      "tool": "inspect_sqlite_database",
+      "status": "ok",
+      "hasTables": false
+    }
+  },
+  "recreationCheck": {
+    "success": true,
+    "outputDirectory": "C:\\Users\\PRASAN~1\\AppData\\Local\\Temp\\forge-pkg-verify-jvJXQi\\recreated-taskflow-app",
+    "filesGenerated": [
+      "app.db",
+      "app.db-shm",
+      "app.db-wal",
+      "browser-comparison.json",
+      "comparison",
+      "forgespec.json",
+      "implementation-plan.json",
+      "package.json",
+      "public",
+      "README.md",
+      "server.js",
+      "test.js",
+      "workflow.test.js"
+    ],
+    "specTitle": "TaskFlow — Project & Task Management"
+  },
+  "appStartCheck": {
+    "serverReady": true,
+    "healthStatus": 200,
+    "healthData": {
+      "status": "ok",
+      "app": "recreated-taskflow-app",
+      "title": "TaskFlow — Project & Task Management",
+      "version": "1.0.0",
+      "storage": "sqlite",
+      "database": "connected",
+      "timestamp": "2026-10-20T10:49:50.539Z"
+    }
+  }
+}

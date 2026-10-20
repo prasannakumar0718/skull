@@ -633,6 +633,104 @@ export class ReaInvestigationBridge {
             catch { }
         }
     }
+    /**
+     * Refreshes discovery information from live REA runtime or re-loads catalog.
+     */
+    async refreshDiscovery() {
+        this.liveDiscoveredTools = undefined;
+        const liveVersion = this.getReaVersion();
+        const catalogMeta = this.getCatalogMetadata();
+        try {
+            const live = await this.discoverLiveReaTools();
+            if (live && live.length > 0) {
+                return {
+                    refreshed: true,
+                    source: "live-mcp",
+                    toolCount: live.length,
+                    reaVersion: liveVersion,
+                    catalogVersion: catalogMeta.catalogVersion
+                };
+            }
+        }
+        catch { }
+        const tools = this.listSupportedReaTools();
+        return {
+            refreshed: true,
+            source: "catalog",
+            toolCount: tools.length,
+            reaVersion: liveVersion,
+            catalogVersion: catalogMeta.catalogVersion
+        };
+    }
+    /**
+     * Searches and discovers REA tools by query string, category, or target type.
+     */
+    searchReaTools(options) {
+        const tools = this.listSupportedReaTools();
+        const reaVersion = this.getReaVersion();
+        const runtimeSource = this.liveDiscoveredTools && this.liveDiscoveredTools.length > 0 ? "live-mcp" : "catalog";
+        const availableCategories = [
+            "database", "web", "android", "procedure", "binary", "dynamic", "network", "reconstruction", "analysis"
+        ];
+        const inferCat = (name, desc) => {
+            const text = (name + " " + desc).toLowerCase();
+            if (text.includes("sqlite") || text.includes("database") || text.includes("sql") || text.includes("table"))
+                return "database";
+            if (text.includes("android") || text.includes("apk") || text.includes("adb") || text.includes("dalvik") || text.includes("flutter"))
+                return "android";
+            if (text.includes("web") || text.includes("javascript") || text.includes("browser") || text.includes("electron") || text.includes("bundle") || text.includes("css"))
+                return "web";
+            if (text.includes("packet") || text.includes("pcap") || text.includes("network") || text.includes("signal"))
+                return "network";
+            if (text.includes("frida") || text.includes("gdb") || text.includes("rizin") || text.includes("cutter") || text.includes("debug") || text.includes("instrument"))
+                return "dynamic";
+            if (text.includes("compare") || text.includes("reconstruction") || text.includes("obligation") || text.includes("ledger") || text.includes("coverage"))
+                return "reconstruction";
+            if (text.includes("procedure") || text.includes("function") || text.includes("disassembly") || text.includes("decompile") || text.includes("xref") || text.includes("instruction") || text.includes("call_graph"))
+                return "procedure";
+            if (text.includes("binary") || text.includes("pe") || text.includes("macho") || text.includes("wasm") || text.includes("rust") || text.includes("go") || text.includes("elf") || text.includes("artifact"))
+                return "binary";
+            return "analysis";
+        };
+        let filtered = tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            category: inferCat(t.name, t.description),
+            inputSchema: t.inputSchema
+        }));
+        if (options?.category && options.category.trim()) {
+            const catQuery = options.category.trim().toLowerCase();
+            filtered = filtered.filter((t) => t.category.toLowerCase() === catQuery);
+        }
+        if (options?.targetType && options.targetType.trim()) {
+            const tQuery = options.targetType.trim().toLowerCase();
+            filtered = filtered.filter((t) => {
+                const text = (t.name + " " + t.description).toLowerCase();
+                return text.includes(tQuery);
+            });
+        }
+        if (options?.query && options.query.trim()) {
+            const qWords = options.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            filtered = filtered.filter((t) => {
+                const text = (t.name + " " + t.description + " " + t.category).toLowerCase();
+                return qWords.every((w) => text.includes(w));
+            });
+        }
+        const totalMatched = filtered.length;
+        const limit = options?.limit && options.limit > 0 ? Math.min(options.limit, 50) : 10;
+        const matches = filtered.slice(0, limit);
+        return {
+            matches,
+            totalMatched,
+            totalAvailable: tools.length,
+            runtimeSource,
+            reaVersion,
+            availableCategories,
+            suggestedInvocation: matches.length > 0
+                ? `To invoke '${matches[0].name}', call forge_rea_tool({ toolName: "${matches[0].name}", toolArguments: <arguments> })`
+                : "Discover tools by passing query, category, or targetType to forge_rea_discover."
+        };
+    }
     findFiles(dir, extensions) {
         const results = [];
         try {

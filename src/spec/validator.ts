@@ -94,11 +94,34 @@ export function createSpecFromPrompt(prompt: string, appName: string = "app"): F
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "") || "forge-app";
 
-  // Domain 0: Rich-Text Document Editor (e.g. Microsoft Word alternative, Document Studio)
-  if (/word|doc|document|rich[- ]?text|writer|editor|notepad/i.test(cleanPrompt)) {
+  // Domain 0: Rich-Text Document Editor (e.g. Microsoft Word alternative, Document Studio, QuickNotes)
+  const isTaskPrompt = /task|todo|job|checklist/i.test(cleanPrompt);
+  const isDocPrompt =
+    /word|document|rich[- ]?text|writer|notepad|quill|wysiwyg/i.test(cleanPrompt) ||
+    /quicknotes/i.test(cleanPrompt) ||
+    (/\bdocs?\b/i.test(cleanPrompt) && !isTaskPrompt) ||
+    (/\bnotes?\b/i.test(cleanPrompt) && !isTaskPrompt);
+
+  if (isDocPrompt && !isTaskPrompt) {
+    // Preserve requested application identity (e.g. QuickNotes) if specified in prompt
+    let resolvedTitle = "Document Studio & Rich-Text Editor";
+    if (/quicknotes/i.test(cleanPrompt)) {
+      resolvedTitle = "QuickNotes Online";
+    } else {
+      const titleMatch = cleanPrompt.match(/(?:recreate|build|clone|develop|create)\s+([A-Z][A-Za-z0-9_ -]+?)(?:\s+(?:as|with|web|app|application|feature|in|into)|$)/i);
+      if (titleMatch && titleMatch[1]?.trim()) {
+        const candidate = titleMatch[1].trim().replace(/^(?:a|an|the|new|modern)\s+/i, "").trim();
+        if (/word/i.test(candidate)) {
+          resolvedTitle = "Document Studio & Rich-Text Editor (Word Alternative)";
+        } else if (candidate.length > 2 && !/^(?:application|software|web app|tool|system|independent)$/i.test(candidate)) {
+          resolvedTitle = `${candidate} - Document Studio`;
+        }
+      }
+    }
+
     return {
       name: sanitizedName,
-      title: "Document Studio & Rich-Text Editor",
+      title: resolvedTitle,
       description: cleanPrompt,
       targetEngine: "auto",
       capabilities: [

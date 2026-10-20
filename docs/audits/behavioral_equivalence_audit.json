@@ -1,0 +1,171 @@
+{
+  "timestamp": "2026-10-20T07:38:10.451Z",
+  "quicknotes": {
+    "titleMatch": true,
+    "referenceTitle": "QuickNotes Online",
+    "recreationTitle": "QuickNotes Online",
+    "uniqueButtonLabels": {
+      "reference": [
+        "+ new document",
+        "export ▾",
+        "b",
+        "i",
+        "u",
+        "s",
+        "h1",
+        "h2",
+        "¶",
+        "• list",
+        "1. list",
+        "“ quote",
+        "×"
+      ],
+      "recreation": [
+        "+ new document",
+        "export ▾",
+        "b",
+        "i",
+        "u",
+        "s",
+        "h1",
+        "h2",
+        "¶",
+        "• list",
+        "1. list",
+        "“ quote",
+        "×"
+      ],
+      "common": [
+        "+ new document",
+        "export ▾",
+        "b",
+        "i",
+        "u",
+        "s",
+        "h1",
+        "h2",
+        "¶",
+        "• list",
+        "1. list",
+        "“ quote",
+        "×"
+      ],
+      "missingInRecreation": [],
+      "extraInRecreation": []
+    },
+    "interactiveControlCounts": {
+      "referenceButtons": 14,
+      "recreationButtons": 14,
+      "referenceInputs": 2,
+      "recreationInputs": 2,
+      "referenceTotalInteractive": 16,
+      "recreationTotalInteractive": 16
+    },
+    "workflows": [
+      {
+        "name": "wf_create_document",
+        "status": "pass",
+        "details": "Clicked New Note; new active document initialized"
+      },
+      {
+        "name": "wf_rich_text_editing",
+        "status": "pass",
+        "details": "Typed into title and editor canvas; autosave triggered"
+      },
+      {
+        "name": "wf_toolbar_actions",
+        "status": "pass",
+        "details": "Interacted with formatting toolbar controls"
+      },
+      {
+        "name": "wf_reload_persistence",
+        "status": "pass",
+        "details": "Reloaded browser; edited document title & body persisted"
+      },
+      {
+        "name": "wf_restart_persistence",
+        "status": "pass",
+        "details": "Restarted server process; document persisted across cold restart"
+      }
+    ]
+  },
+  "taskflow": {
+    "titleMatch": true,
+    "referenceTitle": "TaskFlow — Project & Task Management",
+    "recreationTitle": "TaskFlow — Project & Task Management",
+    "uniqueButtonLabels": {
+      "reference": [
+        "+ add task",
+        "all tasks",
+        "active",
+        "completed",
+        "high priority",
+        "complete",
+        "delete",
+        "reopen"
+      ],
+      "recreation": [
+        "+ add task",
+        "all tasks",
+        "active",
+        "completed",
+        "high priority",
+        "complete",
+        "delete",
+        "reopen"
+      ],
+      "common": [
+        "+ add task",
+        "all tasks",
+        "active",
+        "completed",
+        "high priority",
+        "complete",
+        "delete",
+        "reopen"
+      ],
+      "missingInRecreation": [],
+      "extraInRecreation": []
+    },
+    "interactiveControlCounts": {
+      "referenceButtons": 11,
+      "recreationButtons": 11,
+      "referenceInputs": 4,
+      "recreationInputs": 4,
+      "referenceTotalInteractive": 15,
+      "recreationTotalInteractive": 15
+    },
+    "workflows": [
+      {
+        "name": "wf_record_creation",
+        "status": "pass",
+        "details": "Created task via form and verified DOM addition"
+      },
+      {
+        "name": "wf_view_filtering",
+        "status": "pass",
+        "details": "Tested Active, Completed, and All Tasks filters"
+      },
+      {
+        "name": "wf_status_lifecycle",
+        "status": "pass",
+        "details": "Toggled task status; Complete converted to Reopen"
+      },
+      {
+        "name": "wf_reload_persistence",
+        "status": "pass",
+        "details": "Reloaded browser; created task persisted in DOM"
+      },
+      {
+        "name": "wf_restart_persistence",
+        "status": "pass",
+        "details": "Restarted server process; task data persisted in SQLite WAL"
+      },
+      {
+        "name": "wf_record_deletion",
+        "status": "pass",
+        "details": "Clicked Delete; item removed from view and storage"
+      }
+    ]
+  }
+}

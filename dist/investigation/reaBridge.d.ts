@@ -137,5 +137,37 @@ export declare class ReaInvestigationBridge {
      * Directly invokes the real upstream REA MCP server via StdioClientTransport.
      */
     private invokeReaMcpTool;
+    /**
+     * Refreshes discovery information from live REA runtime or re-loads catalog.
+     */
+    refreshDiscovery(): Promise<{
+        refreshed: boolean;
+        source: "live-mcp" | "catalog";
+        toolCount: number;
+        reaVersion: string;
+        catalogVersion: string;
+    }>;
+    /**
+     * Searches and discovers REA tools by query string, category, or target type.
+     */
+    searchReaTools(options?: {
+        query?: string;
+        category?: string;
+        targetType?: string;
+        limit?: number;
+    }): {
+        matches: Array<{
+            name: string;
+            description: string;
+            category: string;
+            inputSchema: Record<string, unknown>;
+        }>;
+        totalMatched: number;
+        totalAvailable: number;
+        runtimeSource: "live-mcp" | "catalog";
+        reaVersion: string;
+        availableCategories: string[];
+        suggestedInvocation: string;
+    };
     private findFiles;
 }

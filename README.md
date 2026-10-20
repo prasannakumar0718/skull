@@ -1,10 +1,10 @@
 # Agent App Forge
 
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.13.0-brightgreen.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Protocol](https://img.shields.io/badge/MCP-1.6.1-blue.svg)](https://modelcontextprotocol.io/)
-[![REA Parity](https://img.shields.io/badge/REA%20Tools-207%2F207%20Parity-success.svg)](https://github.com/agent-app-forge)
-[![Tests](https://img.shields.io/badge/Tests-77%2F77%20Passing-brightgreen.svg)](https://github.com/agent-app-forge)
+[![REA Parity](https://img.shields.io/badge/REA%20Tools-207%2F207%20Parity-success.svg)](https://github.com/prasannakumar0718/skull)
+[![Tests](https://img.shields.io/badge/Tests-121%2F121%20Passing-brightgreen.svg)](https://github.com/agent-app-forge)
 
 > **Agent-agnostic software recreation, reverse-engineering analysis, and declarative full-stack application synthesis system with autonomous verification and Model Context Protocol (MCP) tooling.**
 
@@ -16,14 +16,14 @@ Agent App Forge is an open-source orchestration layer that connects:
 1. **Reverse-Engineering Analysis ([REA](https://github.com/agent-app-forge)):** Deeply investigates existing software, binaries, APIs, and databases across 207 native REA analysis tools.
 2. **Declarative Synthesis Engine ([Wasp](https://wasp.sh) & Universal Node):** Generates clean, independent full-stack web applications with high-performance SQLite WAL storage, responsive UIs, and zero external runtime npm dependencies.
 3. **Autonomous Verification & Bounded Self-Repair:** Executes isolated test pipelines, detects syntax and database failures, and automatically reconstructs corrupted code from the specification model.
-4. **Universal MCP Server:** Exposes **214 MCP tools** (7 Forge core orchestration tools + 207 REA analysis tools) directly to any AI coding assistant or IDE over standard I/O (`stdio`).
+4. **Context-Optimized MCP Interface:** Exposes **9 high-level core orchestration and discovery tools** by default (<6 KB schema, saving over 194,000 tokens / 99.32% per turn), with on-demand dynamic discovery across all 207 REA analysis tools. Full individual-tool exposure remains available via `--mode full`.
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Node.js**: `v22.0.0` or higher (`v24.19.0` recommended) with native `node:sqlite`.
+- **Node.js**: `v22.13.0` or higher (`v24.19.0` recommended) with native `node:sqlite`.
 - **Git**: Recent version.
 - **Operating System**: Windows, macOS, or Linux.
 
@@ -50,7 +50,7 @@ forge capabilities
 
 #### Option C: Install from Source
 ```bash
-git clone https://github.com/agent-app-forge/agent-app-forge.git
+git clone https://github.com/prasannakumar0718/skull.git
 cd agent-app-forge
 npm install
 npm run build
@@ -129,18 +129,30 @@ Or configure manually in your agent's MCP settings:
 }
 ```
 
-### Available MCP Tools (214 Total)
+### Core MCP Tools (Compact Default)
+
+Forge exposes 9 high-level tools designed to guide AI agents through the creation lifecycle without consuming context:
 
 | Tool Name | Type | Purpose |
 | :--- | :--- | :--- |
-| `forge_recreate_app` | Orchestration | Executes the complete Investigate $\rightarrow$ Specify $\rightarrow$ Plan $\rightarrow$ Build $\rightarrow$ Run $\rightarrow$ Compare $\rightarrow$ Repair lifecycle. |
+| `forge_capabilities` | Diagnostics | Explains Forge's purpose, 8-step workflow, engines, modes, and system prerequisites. |
 | `forge_inspect_reference` | Investigation | Probes codebases for database schemas, route endpoints, and cryptographic file hashes. |
 | `forge_create_spec` | Specification | Converts natural language requests into validated `ForgeSpec` models. |
+| `forge_recreate_app` | Orchestration | Executes the complete Investigate $\rightarrow$ Specify $\rightarrow$ Plan $\rightarrow$ Build $\rightarrow$ Run $\rightarrow$ Compare $\rightarrow$ Repair lifecycle. |
 | `forge_generate_app` | Synthesis | Scaffolds running full-stack applications with persistent SQLite WAL storage. |
 | `forge_verify_app` | Verification | Executes bounded test suites and applies autonomous self-repairs. |
+| `forge_rea_discover` | Discovery | Searches and discovers any of REA's 207 native tools by keyword or category. |
+| `forge_rea_tool` | Execution | Universal executor for any native REA tool (accepts objects or serialized JSON strings). |
 | `forge_wasp_cli` | Delegation | Direct pass-through to Wasp CLI with platform guidance. |
-| `forge_rea_tool` | Proxy | Universal proxy for invoking any upstream REA tool. |
-| `rea_<tool_name>` (207 tools) | REA Native | Direct collision-safe routes to every native REA reverse-engineering analysis tool. |
+
+### Dynamic REA Discovery vs. Full Mode
+
+- **Default (`compact`) Mode**: The agent receives the 9 tools above (~1,333 tokens). When it needs deep reverse engineering, it calls `forge_rea_discover({ query: "sqlite" })` to retrieve the exact schema and invokes it via `forge_rea_tool`.
+- **Advanced (`full`) Mode**: Exposes all 216 tools (9 core + 207 individual `rea_<tool_name>` tools) directly in the tool list. Run with:
+  ```bash
+  forge mcp --mode full
+  # or set FORGE_MCP_MODE=full
+  ```
 
 ---
 

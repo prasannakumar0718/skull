@@ -17,10 +17,12 @@ Agent App Forge provides Model Context Protocol (MCP) tools and CLI commands tha
 Whenever asked to recreate existing software, build a functional alternative, or generate an application from a reference or prompt, execute this 9-step workflow:
 
 ### Step 1: Investigate Reference with REA
-- Call `forge_inspect_reference({ referencePath: "<path>" })` or use individual REA tools:
-  - `rea_inspect_sqlite_database` for database structure and WAL mode.
-  - `rea_inspect_artifact` for file hashes and bundle structure.
-  - `rea_get_call_graph` for function relationships.
+- Call `forge_inspect_reference({ referencePath: "<path>" })` to extract high-level schemas, routes, and patterns.
+- If deeper investigation is required, discover relevant tools from REA's 207-tool catalog using:
+  - `forge_rea_discover({ query: "sqlite" })` for database introspection (`inspect_sqlite_database`).
+  - `forge_rea_discover({ category: "binary" })` for binary headers, hashes, and imports.
+  - `forge_rea_discover({ category: "web" })` for web bundles, sources, and event listeners.
+- Invoke discovered tools via `forge_rea_tool({ toolName: "<name>", toolArguments: <args> })` (accepts structured objects or serialized JSON strings).
 - Note what is observable on disk and what requires runtime probing.
 
 ### Step 2: Gather and Preserve Evidence

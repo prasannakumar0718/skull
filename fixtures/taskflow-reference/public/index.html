@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskFlow — Project & Task Management</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="brand">
+        <h1>TaskFlow</h1>
+        <span class="subtitle">Project & Task Management</span>
+      </div>
+      <div class="header-stats">
+        <span id="stat-total" class="stat-badge">Total: 0</span>
+        <span id="stat-active" class="stat-badge stat-active">Active: 0</span>
+        <span id="stat-completed" class="stat-badge stat-done">Completed: 0</span>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <!-- Left sidebar / Form section -->
+      <section class="task-form-panel">
+        <h2>Create New Task</h2>
+        <form id="create-task-form">
+          <div class="form-group">
+            <label for="task-title">Task Title</label>
+            <input type="text" id="task-title" name="title" placeholder="e.g. Implement parity scoring" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="task-category">Category</label>
+              <select id="task-category" name="category">
+                <option value="Engineering">Engineering</option>
+                <option value="Design">Design</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Operations">Operations</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="task-priority">Priority</label>
+              <select id="task-priority" name="priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="task-notes">Notes</label>
+            <textarea id="task-notes" name="notes" rows="3" placeholder="Additional details or acceptance criteria..."></textarea>
+          </div>
+
+          <button type="submit" id="btn-add-task" class="btn btn-primary">+ Add Task</button>
+        </form>
+      </section>
+
+      <!-- Right content / Tasks list section -->
+      <section class="task-list-panel">
+        <div class="filter-bar">
+          <button type="button" class="btn filter-btn active" data-filter="all">All Tasks</button>
+          <button type="button" class="btn filter-btn" data-filter="active">Active</button>
+          <button type="button" class="btn filter-btn" data-filter="completed">Completed</button>
+          <button type="button" class="btn filter-btn" data-filter="high">High Priority</button>
+        </div>
+
+        <div id="task-list" class="task-list">
+          <!-- Rendered task items -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -23,14 +23,16 @@
         "transport": "stdio"
       },
       "accessibleFeatures": [
-        "forge_recreate_app",
+        "forge_capabilities",
         "forge_inspect_reference",
         "forge_create_spec",
+        "forge_recreate_app",
         "forge_generate_app",
         "forge_verify_app",
+        "forge_rea_discover",
         "forge_rea_tool",
         "forge_wasp_cli",
-        "All 207 collision-safe REA tools (rea_<name>)",
+        "All 207 REA tools dynamically discoverable via forge_rea_discover or exposed via --mode full",
         "CLI commands (forge capabilities, forge adapters, forge recreate, forge create, forge wasp, forge rea, forge doctor)"
       ],
       "setupType": "automated",
@@ -101,7 +103,7 @@
       "setupType": "automated",
       "testEvidence": "OpenCode binary verified. CLI argument forwarding and exit code propagation verified in automated test suite.",
       "status": "protocol-tested",
-      "limitations": "Requires Node.js >= 22.0.0 on host machine for native SQLite support."
+      "limitations": "Requires Node.js >= 22.13.0 on host machine for native SQLite support."
     },
     {
       "id": "vscode-copilot",

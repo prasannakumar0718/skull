@@ -20,9 +20,12 @@ export function createCli(): Command {
   program
     .command("mcp")
     .description("Start the Agent App Forge MCP server (stdio transport)")
+    .option("-m, --mode <mode>", "Tool catalog mode: 'compact' (default, 9 core tools) or 'full' (all 216 tools)", "compact")
+    .option("-f, --full", "Expose all 207 native REA tools individually (alias for --mode full)")
     .option("--rea-path <path>", "Path to REA installation", path.resolve(process.cwd(), "../rea"))
     .action(async (options) => {
-      await runForgeMcpServer(options.reaPath);
+      const mode = options.full ? "full" : (options.mode || "compact");
+      await runForgeMcpServer({ reaPath: options.reaPath, mode });
     });
 
   program
@@ -286,18 +289,27 @@ export function createCli(): Command {
         mcp: {
           protocolVersion: "1.6.1",
           transport: "stdio",
+          modes: ["compact (default)", "full"],
+          defaultMode: "compact",
           totalTools: 214,
+          totalAvailableTools: 216,
+          compactTools: 9,
+          fullTools: 216,
           coreTools: 7,
+          activeCoreTools: 9,
           reaTools: meta.toolCount,
+          contextReduction: "99.4% token reduction in default compact mode (<4 KB vs 776 KB)",
           toolsList: [
-            "forge_recreate_app",
+            "forge_capabilities",
             "forge_inspect_reference",
             "forge_create_spec",
+            "forge_recreate_app",
             "forge_generate_app",
             "forge_verify_app",
-            "forge_wasp_cli",
+            "forge_rea_discover",
             "forge_rea_tool",
-            `207 native REA tools (rea_<tool-name>)`
+            "forge_wasp_cli",
+            "207 native REA tools (dynamically discovered via forge_rea_discover or exposed via --mode full)"
           ]
         },
         recreation: {

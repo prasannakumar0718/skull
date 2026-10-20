@@ -32,9 +32,9 @@ export function checkSystemPrerequisites(reaRepoPath = path.resolve(process.cwd(
   // 1. Check Node.js Version
   const nodeVersion = process.versions.node;
   const [major, minor] = nodeVersion.split(".").map(Number);
-  // node:sqlite requires Node >= 22.5.0, fully stabilized in >= 22.11.0
-  const sqliteAvailable = major > 22 || (major === 22 && minor >= 5);
-  const nodeSupported = major >= 22;
+  // node:sqlite requires Node >= 22.13.0 for stable unflagged DatabaseSync execution
+  const sqliteAvailable = major > 22 || (major === 22 && minor >= 13);
+  const nodeSupported = major > 22 || (major === 22 && minor >= 13);
 
   // 2. Check Wasp CLI and WSL on host
   let waspInstalled = false;
@@ -104,7 +104,7 @@ export function checkSystemPrerequisites(reaRepoPath = path.resolve(process.cwd(
       minor,
       isSupported: nodeSupported,
       sqliteAvailable,
-      notes: nodeSupported ? undefined : "Node.js >= 22.0.0 is required for built-in node:sqlite support."
+      notes: nodeSupported ? undefined : "Node.js >= 22.13.0 is required for built-in node:sqlite support."
     },
     wasp: {
       installed: waspInstalled,

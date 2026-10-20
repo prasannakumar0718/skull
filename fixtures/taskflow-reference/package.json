@@ -1,0 +1,10 @@
+{
+  "name": "taskflow-reference",
+  "version": "1.0.0",
+  "description": "TaskFlow - Interactive Project and Task Management System",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

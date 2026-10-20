@@ -1,0 +1,10 @@
+{
+  "name": "live-mcp-quicknotes-verified",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js",
+    "test:workflow": "node workflow.test.js"
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "name": "live-mcp-quicknotes-verified",
+  "title": "QuickNotes Online",
+  "description": "Recreate QuickNotes Online application with note CRUD, responsive layout, and persistent SQLite storage",
+  "targetEngine": "fullstack-node",
+  "entities": [
+    {
+      "name": "Record",
+      "description": "Generic persistent record item",
+      "provenance": "user_requested",
+      "fields": [
+        {
+          "name": "id",
+          "type": "Int",
+          "isId": true,
+          "isRequired": true,
+          "provenance": "user_requested"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "isId": false,
+          "isRequired": true,
+          "provenance": "user_requested"
+        },
+        {
+          "name": "notes",
+          "type": "String",
+          "isId": false,
+          "isRequired": false,
+          "provenance": "user_requested"
+        },
+        {
+          "name": "createdAt",
+          "type": "DateTime",
+          "isId": false,
+          "isRequired": true,
+          "provenance": "inferred"
+        }
+      ]
+    },
+    {
+      "name": "Document",
+      "description": "Entity observed from interactive web form at action '/api/notes'",
+      "provenance": "observed",
+      "fields": [
+        {
+          "name": "id",
+          "type": "Int",
+          "isId": true,
+          "isRequired": true,
+          "provenance": "inferred"
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "isId": false,
+          "isRequired": true,
+          "provenance": "observed"
+        },
+        {
+          "name": "content",
+          "type": "String",
+          "isId": false,
+          "isRequired": false,
+          "provenance": "observed"
+        }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "name": "getRecords",
+      "type": "query",
+      "entities": [
+        "Record"
+      ],
+      "description": "Fetch records",
+      "provenance": "user_requested"
+    },
+    {
+      "name": "createRecord",
+      "type": "action",
+      "entities": [
+        "Record"
+      ],
+      "description": "Create record",
+      "provenance": "user_requested"
+    },
+    {
+      "name": "deleteRecord",
+      "type": "action",
+      "entities": [
+        "Record"
+      ],
+      "description": "Delete record",
+      "provenance": "user_requested"
+    }
+  ],
+  "routes": [
+    {
+      "name": "HomeRoute",
+      "path": "/",
+      "component": "MainPage",
+      "isProtected": false,
+      "provenance": "user_requested"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "wf_record_crud",
+      "name": "Record Data Management",
+      "description": "Create and query persistent data records",
+      "trigger": "User saves record",
+      "provenance": "user_requested",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Save data record",
+          "expectedOutcome": "Record saved to SQLite",
+          "provenance": "user_requested"
+        }
+      ],
+      "acceptanceCriteria": [
+        "Record persists with ID"
+      ]
+    },
+    {
+      "id": "wf_form_document",
+      "name": "Document Submission Workflow",
+      "description": "Observed user submission workflow on /api/notes",
+      "trigger": "User submits Document form",
+      "provenance": "observed",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Submit Document data",
+          "expectedOutcome": "Data persisted and user notified",
+          "provenance": "observed"
+        }
+      ],
+      "acceptanceCriteria": [
+        "Form inputs validate and submit to endpoint without error"
+      ]
+    },
+    {
+      "id": "wf_web_navigation",
+      "name": "Web Navigation & UI Rendering Workflow",
+      "description": "Render observable interface discovered at http://127.0.0.1:3901",
+      "trigger": "User opens web application route",
+      "provenance": "observed",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Load root route",
+          "expectedOutcome": "Responsive interface rendered with navigation controls",
+          "provenance": "observed"
+        }
+      ],
+      "acceptanceCriteria": [
+        "Application loads within 2 seconds",
+        "Controls render interactively"
+      ]
+    }
+  ],
+  "coverageAssessment": {
+    "totalWorkflows": 2,
+    "observedWorkflows": 2,
+    "inferredWorkflows": 0,
+    "unknownWorkflows": 0,
+    "blockedByMissingProviders": [],
+    "confidenceScore": 0.88
+  },
+  "auth": {
+    "enabled": false,
+    "methods": [
+      "usernameAndPassword"
+    ]
+  },
+  "metadata": {
+    "domain": "generic",
+    "inferredAssumptions": [
+      "Inferred generic persistent data record entity 'Record'",
+      "Assumed unauthenticated local dev storage",
+      "Inferred generic CRUD operations"
+    ]
+  },
+  "capabilities": [
+    "web-application",
+    "responsive-layout",
+    "form-submission",
+    "rest-api",
+    "autosave"
+  ]
+}

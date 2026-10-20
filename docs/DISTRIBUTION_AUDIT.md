@@ -62,7 +62,7 @@ No upstream files were modified, moved, or deleted.
     "agent-app-forge": "bin/forge.js"
   }
   ```
-- **Engine Constraint**: `"engines": { "node": ">=22.0.0" }`
+- **Engine Constraint**: `"engines": { "node": ">=22.13.0" }`
 - **Files Manifest**:
   ```json
   "files": [

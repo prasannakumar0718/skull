@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { ForgeSpec } from "../spec/schema.js";
 import { AppGenerationEngine, GenerationResult, GeneratedFile } from "./types.js";
 
@@ -14,11 +17,69 @@ export class UniversalNodeEngine implements AppGenerationEngine {
       spec.entities.some((e) => e.name.toLowerCase().includes("document")) ||
       (spec.capabilities && spec.capabilities.includes("rich-text-editing"));
 
+    let result: GenerationResult;
     if (isDocumentEditor) {
-      return this.generateDocumentEditorApp(spec);
+      result = this.generateDocumentEditorApp(spec);
+    } else {
+      result = this.generateStandardApp(spec);
     }
 
-    return this.generateStandardApp(spec);
+    if (_targetDirectory) {
+      try {
+        if (!fs.existsSync(_targetDirectory)) {
+          fs.mkdirSync(_targetDirectory, { recursive: true });
+        }
+        const dbPath = path.join(_targetDirectory, "app.db");
+        const db = new DatabaseSync(dbPath);
+        db.exec("PRAGMA journal_mode = WAL;");
+        if (isDocumentEditor) {
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS documents (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              content TEXT NOT NULL DEFAULT '',
+              format TEXT NOT NULL DEFAULT 'html',
+              wordCount INTEGER NOT NULL DEFAULT 0,
+              isArchived INTEGER NOT NULL DEFAULT 0,
+              createdAt TEXT NOT NULL,
+              updatedAt TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS revisions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              documentId INTEGER NOT NULL,
+              contentSnapshot TEXT NOT NULL,
+              summary TEXT,
+              savedAt TEXT NOT NULL
+            );
+          `);
+        } else {
+          db.exec(`
+            CREATE TABLE IF NOT EXISTS tasks (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              category TEXT DEFAULT 'General',
+              priority TEXT DEFAULT 'medium',
+              completed INTEGER DEFAULT 0,
+              notes TEXT DEFAULT '',
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+          const countRow = db.prepare("SELECT COUNT(*) AS count FROM tasks").get() as any;
+          if (Number(countRow.count) === 0) {
+            const insertStmt = db.prepare(`
+              INSERT INTO tasks (title, category, priority, completed, notes, created_at)
+              VALUES (?, ?, ?, ?, ?, datetime('now'))
+            `);
+            insertStmt.run("Implement adaptive parity scoring", "Engineering", "high", 1, "Completed weighted scoring model.");
+            insertStmt.run("Design responsive mobile layout", "Design", "medium", 0, "Verify 375x667 viewport without overflow.");
+            insertStmt.run("Audit real-website browser interactions", "Engineering", "high", 0, "Test clicks, inputs, reload and persistence.");
+          }
+        }
+        db.close();
+      } catch {}
+    }
+
+    return result;
   }
 
   private generateDocumentEditorApp(spec: ForgeSpec): GenerationResult {
@@ -359,7 +420,7 @@ export const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(\`[Document Studio Server] running at http://localhost:\${PORT}\`);
+  console.log(\`[\${${JSON.stringify(spec.title)}} Server] running at http://localhost:\${PORT}\`);
 });
 `;
 
@@ -477,6 +538,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helve
 .editor-canvas p { margin-bottom: 14px; }
 .editor-canvas ul, .editor-canvas ol { margin-left: 24px; margin-bottom: 14px; }
 .editor-canvas blockquote { border-left: 3px solid #d1d5db; padding-left: 14px; color: #4b5563; font-style: italic; margin-bottom: 14px; }
+@media (max-width: 600px) {
+  body { overflow-x: hidden; height: auto; min-height: 100vh; }
+  .app-header { flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 12px; }
+  .header-left { width: 100%; justify-content: space-between; }
+  .header-right { width: 100%; justify-content: flex-end; }
+  .doc-title-input { max-width: 160px; font-size: 1rem; }
+  .toolbar { flex-wrap: wrap; padding: 6px 12px; gap: 3px; }
+  .tool-btn { padding: 4px 6px; font-size: 0.75rem; }
+  .workspace { flex-direction: column; overflow: visible; }
+  .sidebar { width: 100%; max-height: 160px; border-right: none; border-bottom: 1px solid #e5e7eb; }
+  .editor-container { padding: 12px; width: 100%; }
+  .editor-canvas { padding: 16px; min-height: 400px; width: 100%; }
+}
 @media print {
   .sidebar, .toolbar, .header, .btn-del-doc { display: none !important; }
   .workspace { display: block !important; }
@@ -669,7 +743,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, "app.db");
 
-console.log("Running self-verification tests for Document Studio...");
+console.log("Running self-verification tests for " + ${JSON.stringify(spec.title)} + "...");
 
 // 1. Verify Database
 if (!fs.existsSync(dbPath)) {
@@ -766,7 +840,7 @@ function makeRequest(method, path, body) {
 }
 
 async function runWorkflows() {
-  console.log("Verifying observable workflows for Document Studio...");
+  console.log("Verifying observable workflows for " + ${JSON.stringify(spec.title)} + "...");
 
   // Workflow 1: Document Creation & Editing
   console.log(" -> Testing Document Creation...");
@@ -846,7 +920,7 @@ npm test
     return {
       engineName: this.name,
       files,
-      entryPointInstructions: "Run `node server.js` to launch Document Studio at http://localhost:3000 (persistent SQLite backend)",
+      entryPointInstructions: `Run \`node server.js\` to launch ${spec.title} at http://localhost:3000 (persistent SQLite backend)`,
       supportedOnPlatform: true
     };
   }
@@ -862,7 +936,8 @@ npm test
       scripts: {
         dev: "node server.js",
         start: "node server.js",
-        test: "node test.js"
+        test: "node test.js",
+        "test:workflow": "node workflow.test.js"
       }
     };
 
@@ -871,7 +946,7 @@ npm test
       content: JSON.stringify(packageJson, null, 2) + "\n"
     });
 
-    // 2. server.js
+    // 2. server.js (Zero-dependency Node HTTP + Native SQLite with dynamic attributes and analytics)
     const serverJs = `import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -879,7 +954,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || "3000", 10);
 const DB_FILE = path.join(__dirname, "app.db");
 
 // Persistent SQLite Storage Setup with WAL mode
@@ -889,86 +964,154 @@ db.exec(\`
   CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
-    isDone INTEGER NOT NULL DEFAULT 0,
-    createdAt TEXT NOT NULL
+    category TEXT DEFAULT 'General',
+    priority TEXT DEFAULT 'medium',
+    completed INTEGER DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 \`);
 
 // Seed default tasks if empty
 const countRow = db.prepare("SELECT COUNT(*) AS count FROM tasks").get();
-if (countRow.count === 0) {
-  const seed = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, ?, ?)");
-  seed.run("Welcome to ${spec.title}", 0, new Date().toISOString());
-  seed.run("Verify persistent SQLite storage", 1, new Date().toISOString());
+if (Number(countRow.count) === 0) {
+  const insertStmt = db.prepare(\`
+    INSERT INTO tasks (title, category, priority, completed, notes, created_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+  \`);
+  insertStmt.run("Implement adaptive parity scoring", "Engineering", "high", 1, "Completed weighted scoring model.");
+  insertStmt.run("Design responsive mobile layout", "Design", "medium", 0, "Verify 375x667 viewport without overflow.");
+  insertStmt.run("Audit real-website browser interactions", "Engineering", "high", 0, "Test clicks, inputs, reload and persistence.");
 }
+
+const mimeTypes = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png"
+};
 
 export const server = http.createServer(async (req, res) => {
   const parsedUrl = new URL(req.url, \`http://\${req.headers.host || "localhost"}\`);
   const pathname = parsedUrl.pathname;
   const method = req.method;
 
-  // CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  function sendJson(statusCode, data) {
+    res.writeHead(statusCode, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    });
+    res.end(JSON.stringify(data));
+  }
+
   if (method === "OPTIONS") {
-    res.writeHead(204);
-    res.end();
-    return;
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    });
+    return res.end();
+  }
+
+  function readBody() {
+    return new Promise((resolve, reject) => {
+      let body = "";
+      req.on("data", chunk => { body += chunk; });
+      req.on("end", () => {
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch (e) {
+          reject(e);
+        }
+      });
+      req.on("error", reject);
+    });
   }
 
   // Health check
   if (method === "GET" && pathname === "/api/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", app: "${spec.name}", storage: "sqlite", timestamp: new Date().toISOString() }));
-    return;
+    return sendJson(200, {
+      status: "ok",
+      app: "${spec.name}",
+      title: "${spec.title}",
+      version: "1.0.0",
+      storage: "sqlite",
+      database: "connected",
+      timestamp: new Date().toISOString()
+    });
   }
 
-  // GET /api/tasks
+  // Analytics Metrics
+  if (method === "GET" && pathname === "/api/analytics") {
+    try {
+      const total = Number(db.prepare("SELECT COUNT(*) AS c FROM tasks").get().c);
+      const completed = Number(db.prepare("SELECT COUNT(*) AS c FROM tasks WHERE completed = 1").get().c);
+      const high = Number(db.prepare("SELECT COUNT(*) AS c FROM tasks WHERE priority = 'high'").get().c);
+      return sendJson(200, {
+        total,
+        completed,
+        active: total - completed,
+        highPriority: high
+      });
+    } catch (err) {
+      return sendJson(500, { error: err.message });
+    }
+  }
+
+  // GET /api/tasks (with query filtering)
   if (method === "GET" && pathname === "/api/tasks") {
     try {
-      const tasks = db.prepare("SELECT id, title, (isDone = 1) AS isDone, createdAt FROM tasks ORDER BY id ASC").all();
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(tasks));
-    } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
-  // Helper to read JSON request body
-  const readBody = () => new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => { body += chunk; });
-    req.on("end", () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch (err) {
-        reject(err);
+      const filter = parsedUrl.searchParams.get("filter") || parsedUrl.searchParams.get("status");
+      let sql = "SELECT * FROM tasks";
+      if (filter === "active") {
+        sql += " WHERE completed = 0";
+      } else if (filter === "completed") {
+        sql += " WHERE completed = 1";
+      } else if (filter === "high") {
+        sql += " WHERE priority = 'high'";
       }
-    });
-    req.on("error", reject);
-  });
+      sql += " ORDER BY id DESC";
+      const rows = db.prepare(sql).all().map(t => ({
+        ...t,
+        isDone: Boolean(t.completed)
+      }));
+      return sendJson(200, rows);
+    } catch (err) {
+      return sendJson(500, { error: err.message });
+    }
+  }
 
   // POST /api/tasks
   if (method === "POST" && pathname === "/api/tasks") {
     try {
       const data = await readBody();
-      if (!data.title || typeof data.title !== "string" || !data.title.trim()) {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Title is required" }));
-        return;
+      if (!data.title || !String(data.title).trim()) {
+        return sendJson(400, { error: "Title is required" });
       }
-      const createdAt = new Date().toISOString();
-      const info = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, 0, ?)").run(data.title.trim(), createdAt);
-      res.writeHead(201, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ id: Number(info.lastInsertRowid), title: data.title.trim(), isDone: false, createdAt }));
+      const title = String(data.title).trim();
+      const category = data.category || "General";
+      const priority = data.priority || "medium";
+      let completed = 0;
+      if (data.completed !== undefined) completed = data.completed ? 1 : 0;
+      else if (data.isDone !== undefined) completed = data.isDone ? 1 : 0;
+      const notes = data.notes || data.description || "";
+
+      const stmt = db.prepare(\`
+        INSERT INTO tasks (title, category, priority, completed, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+      \`);
+      const info = stmt.run(title, category, priority, completed, notes);
+      const created = db.prepare("SELECT * FROM tasks WHERE id = ?").get(info.lastInsertRowid);
+      return sendJson(201, {
+        ...created,
+        isDone: Boolean(created.completed)
+      });
     } catch (err) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Invalid JSON or database error" }));
+      return sendJson(400, { error: "Invalid JSON or database error: " + err.message });
     }
-    return;
   }
 
   // PATCH /api/tasks/:id
@@ -976,23 +1119,33 @@ export const server = http.createServer(async (req, res) => {
   if (method === "PATCH" && patchMatch) {
     try {
       const id = parseInt(patchMatch[1], 10);
-      const existing = db.prepare("SELECT id, title, (isDone = 1) AS isDone, createdAt FROM tasks WHERE id = ?").get(id);
+      const existing = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
       if (!existing) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Task not found" }));
-        return;
+        return sendJson(404, { error: "Task not found" });
       }
       const data = await readBody();
-      const isDoneVal = data.isDone !== undefined ? (data.isDone ? 1 : 0) : (existing.isDone ? 1 : 0);
-      const titleVal = data.title !== undefined ? String(data.title).trim() : existing.title;
-      db.prepare("UPDATE tasks SET title = ?, isDone = ? WHERE id = ?").run(titleVal, isDoneVal, id);
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ id, title: titleVal, isDone: Boolean(isDoneVal), createdAt: existing.createdAt }));
+      const newTitle = data.title !== undefined ? String(data.title).trim() : existing.title;
+      const newCat = data.category !== undefined ? String(data.category) : existing.category;
+      const newPrio = data.priority !== undefined ? String(data.priority) : existing.priority;
+      let newComp = existing.completed;
+      if (data.completed !== undefined) newComp = data.completed ? 1 : 0;
+      else if (data.isDone !== undefined) newComp = data.isDone ? 1 : 0;
+      const newNotes = data.notes !== undefined ? String(data.notes) : existing.notes;
+
+      db.prepare(\`
+        UPDATE tasks
+        SET title = ?, category = ?, priority = ?, completed = ?, notes = ?
+        WHERE id = ?
+      \`).run(newTitle, newCat, newPrio, newComp, newNotes, id);
+
+      const updated = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+      return sendJson(200, {
+        ...updated,
+        isDone: Boolean(updated.completed)
+      });
     } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
+      return sendJson(500, { error: err.message });
     }
-    return;
   }
 
   // DELETE /api/tasks/:id
@@ -1000,38 +1153,39 @@ export const server = http.createServer(async (req, res) => {
   if (method === "DELETE" && deleteMatch) {
     try {
       const id = parseInt(deleteMatch[1], 10);
-      const info = db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
-      if (info.changes === 0) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Task not found" }));
-        return;
+      const existing = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id);
+      if (!existing) {
+        return sendJson(404, { error: "Task not found" });
       }
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ success: true, id }));
+      db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+      return sendJson(200, { success: true, id });
     } catch (err) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
+      return sendJson(500, { error: err.message });
     }
-    return;
   }
 
-  // Static file serving: public/index.html
-  if (method === "GET" && (pathname === "/" || pathname === "/index.html")) {
-    const htmlPath = path.join(__dirname, "public", "index.html");
-    if (fs.existsSync(htmlPath)) {
-      res.writeHead(200, { "Content-Type": "text/html" });
-      res.end(fs.readFileSync(htmlPath));
-      return;
-    }
+  // Static File Serving
+  let filePath = pathname === "/" ? "/index.html" : pathname;
+  const safePath = path.normalize(filePath).replace(/^(\\.\\.[\\/\\\\])+/, "");
+  const absolutePath = path.join(__dirname, "public", safePath);
+
+  if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isFile()) {
+    const ext = path.extname(absolutePath).toLowerCase();
+    const contentType = mimeTypes[ext] || "application/octet-stream";
+    res.writeHead(200, { "Content-Type": contentType });
+    return fs.createReadStream(absolutePath).pipe(res);
   }
 
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "Route not found" }));
 });
 
-server.listen(PORT, () => {
-  console.log(\`[Universal Node Server] running at http://localhost:\${PORT} (SQLite: \${DB_FILE})\`);
-});
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMain) {
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(\`[Universal Node Server] ${spec.title} running at http://127.0.0.1:\${PORT} (SQLite: \${DB_FILE})\`);
+  });
+}
 `;
 
     files.push({
@@ -1039,7 +1193,604 @@ server.listen(PORT, () => {
       content: serverJs
     });
 
-    // 3. test.js (Automated self-verification tests)
+    // 3. public/index.html (Faithful structure with stats, multi-attribute form, filter controls, and list)
+    const brandTitle = spec.title.includes("—") ? spec.title.split("—")[0].trim() : spec.title;
+    const brandSubtitle = spec.title.includes("—") ? spec.title.split("—")[1].trim() : spec.description;
+
+    const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${spec.title}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="brand">
+        <h1>${brandTitle}</h1>
+        <span class="subtitle">${brandSubtitle}</span>
+      </div>
+      <div class="header-stats">
+        <span id="stat-total" class="stat-badge">Total: 0</span>
+        <span id="stat-active" class="stat-badge stat-active">Active: 0</span>
+        <span id="stat-completed" class="stat-badge stat-done">Completed: 0</span>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <!-- Left sidebar / Form section -->
+      <section class="task-form-panel">
+        <h2>Create New Task</h2>
+        <form id="create-task-form">
+          <div class="form-group">
+            <label for="task-title">Task Title</label>
+            <input type="text" id="task-title" name="title" placeholder="e.g. Implement feature workflow" required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="task-category">Category</label>
+              <select id="task-category" name="category">
+                <option value="Engineering">Engineering</option>
+                <option value="Design">Design</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Operations">Operations</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="task-priority">Priority</label>
+              <select id="task-priority" name="priority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="task-notes">Notes</label>
+            <textarea id="task-notes" name="notes" rows="3" placeholder="Additional details or acceptance criteria..."></textarea>
+          </div>
+
+          <button type="submit" id="btn-add-task" class="btn btn-primary">+ Add Task</button>
+        </form>
+      </section>
+
+      <!-- Right content / Tasks list section -->
+      <section class="task-list-panel">
+        <div class="filter-bar">
+          <button type="button" class="btn filter-btn active" data-filter="all">All Tasks</button>
+          <button type="button" class="btn filter-btn" data-filter="active">Active</button>
+          <button type="button" class="btn filter-btn" data-filter="completed">Completed</button>
+          <button type="button" class="btn filter-btn" data-filter="high">High Priority</button>
+        </div>
+
+        <div id="task-list" class="task-list">
+          <!-- Rendered task items -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+`;
+
+    files.push({
+      relativePath: "public/index.html",
+      content: indexHtml
+    });
+
+    // 4. public/style.css (Clean, responsive layout matching reference dimensions)
+    const styleCss = `* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f4f6f9;
+  color: #1e293b;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.brand h1 {
+  font-size: 1.6rem;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.header-stats {
+  display: flex;
+  gap: 8px;
+}
+
+.stat-badge {
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  font-weight: 600;
+  color: #475569;
+}
+
+.stat-active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.stat-done {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.task-form-panel {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  height: fit-content;
+}
+
+.task-form-panel h2 {
+  font-size: 1.2rem;
+  margin-bottom: 16px;
+  color: #334155;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #475569;
+}
+
+input[type="text"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+  width: 100%;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.task-list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: #ffffff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.filter-btn {
+  background: transparent;
+  color: #64748b;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  border-radius: 6px;
+}
+
+.filter-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.filter-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  padding: 16px 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  border-left: 4px solid #94a3b8;
+  transition: transform 0.15s;
+}
+
+.task-item.priority-high {
+  border-left-color: #ef4444;
+}
+
+.task-item.priority-medium {
+  border-left-color: #f59e0b;
+}
+
+.task-item.priority-low {
+  border-left-color: #10b981;
+}
+
+.task-item.is-completed {
+  opacity: 0.7;
+}
+
+.task-item.is-completed .task-title {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-meta {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.badge-category {
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.badge-priority {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge-priority.high {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.badge-priority.medium {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.badge-priority.low {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.task-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.task-notes {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.task-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.btn-toggle {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.btn-toggle:hover {
+  background: #dbeafe;
+}
+
+.btn-delete {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.btn-delete:hover {
+  background: #fecaca;
+}
+`;
+
+    files.push({
+      relativePath: "public/style.css",
+      content: styleCss
+    });
+
+    // 5. public/app.js (Interactive client logic with live REST binding, filters, and persistence)
+    const appJs = `let allTasks = [];
+let currentFilter = "all";
+
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("create-task-form");
+  const filterButtons = document.querySelectorAll(".filter-btn");
+
+  if (form) {
+    form.addEventListener("submit", handleCreateTask);
+  }
+
+  filterButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      filterButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentFilter = btn.dataset.filter || "all";
+      renderTasks();
+    });
+  });
+
+  loadTasks();
+});
+
+async function loadTasks() {
+  try {
+    const res = await fetch("/api/tasks");
+    if (res.ok) {
+      allTasks = await res.json();
+      renderTasks();
+      updateStats();
+    }
+  } catch (err) {
+    console.error("Failed to load tasks:", err);
+  }
+}
+
+async function handleCreateTask(e) {
+  e.preventDefault();
+  const titleInput = document.getElementById("task-title");
+  const categorySelect = document.getElementById("task-category");
+  const prioritySelect = document.getElementById("task-priority");
+  const notesInput = document.getElementById("task-notes");
+
+  const title = titleInput.value.trim();
+  if (!title) return;
+
+  const newTask = {
+    title,
+    category: categorySelect ? categorySelect.value : "General",
+    priority: prioritySelect ? prioritySelect.value : "medium",
+    notes: notesInput ? notesInput.value.trim() : ""
+  };
+
+  try {
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newTask)
+    });
+
+    if (res.ok) {
+      const created = await res.json();
+      allTasks.unshift(created);
+      titleInput.value = "";
+      if (notesInput) notesInput.value = "";
+      renderTasks();
+      updateStats();
+    }
+  } catch (err) {
+    console.error("Failed to create task:", err);
+  }
+}
+
+async function toggleTask(id, currentStatus) {
+  try {
+    const res = await fetch(\`/api/tasks/\${id}\`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: !currentStatus })
+    });
+
+    if (res.ok) {
+      const updated = await res.json();
+      const idx = allTasks.findIndex((t) => t.id === id);
+      if (idx !== -1) {
+        allTasks[idx] = updated;
+        renderTasks();
+        updateStats();
+      }
+    }
+  } catch (err) {
+    console.error("Failed to toggle task:", err);
+  }
+}
+
+async function deleteTask(id) {
+  try {
+    const res = await fetch(\`/api/tasks/\${id}\`, {
+      method: "DELETE"
+    });
+
+    if (res.ok) {
+      allTasks = allTasks.filter((t) => t.id !== id);
+      renderTasks();
+      updateStats();
+    }
+  } catch (err) {
+    console.error("Failed to delete task:", err);
+  }
+}
+
+function renderTasks() {
+  const container = document.getElementById("task-list");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const filtered = allTasks.filter((task) => {
+    if (currentFilter === "active") return !task.completed;
+    if (currentFilter === "completed") return Boolean(task.completed);
+    if (currentFilter === "high") return task.priority === "high";
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = \`<div class="empty-state" style="padding: 32px; text-align: center; color: #94a3b8; background: #fff; border-radius: 8px;">No tasks found.</div>\`;
+    return;
+  }
+
+  filtered.forEach((task) => {
+    const card = document.createElement("div");
+    card.className = \`task-item priority-\${task.priority || "medium"} \${task.completed ? "is-completed" : ""}\`;
+    card.dataset.id = task.id;
+
+    card.innerHTML = \`
+      <div class="task-info">
+        <div class="task-meta">
+          <span class="badge-category">\${escapeHtml(task.category || "General")}</span>
+          <span class="badge-priority \${task.priority || "medium"}">\${task.priority || "medium"}</span>
+        </div>
+        <div class="task-title">\${escapeHtml(task.title)}</div>
+        \${task.notes ? \`<div class="task-notes">\${escapeHtml(task.notes)}</div>\` : ""}
+      </div>
+      <div class="task-actions">
+        <button type="button" class="btn btn-sm btn-toggle" onclick="toggleTask(\${task.id}, \${Boolean(task.completed)})">
+          \${task.completed ? "Reopen" : "Complete"}
+        </button>
+        <button type="button" class="btn btn-sm btn-delete" onclick="deleteTask(\${task.id})">
+          Delete
+        </button>
+      </div>
+    \`;
+
+    container.appendChild(card);
+  });
+}
+
+function updateStats() {
+  const total = allTasks.length;
+  const completed = allTasks.filter((t) => t.completed).length;
+  const active = total - completed;
+
+  const totalEl = document.getElementById("stat-total");
+  const activeEl = document.getElementById("stat-active");
+  const doneEl = document.getElementById("stat-completed");
+
+  if (totalEl) totalEl.textContent = \`Total: \${total}\`;
+  if (activeEl) activeEl.textContent = \`Active: \${active}\`;
+  if (doneEl) doneEl.textContent = \`Completed: \${completed}\`;
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+window.toggleTask = toggleTask;
+window.deleteTask = deleteTask;
+`;
+
+    files.push({
+      relativePath: "public/app.js",
+      content: appJs
+    });
+
+    // 6. test.js (Automated self-verification tests)
     const testJs = `import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
@@ -1065,21 +1816,45 @@ if (!tableCheck) {
   process.exit(1);
 }
 
-// 3. Verify Read Capabilities
+// 3. Verify Columns Integrity
+const columns = db.prepare("PRAGMA table_info(tasks)").all();
+const colNames = columns.map(c => c.name);
+const requiredCols = ["id", "title", "category", "priority", "completed", "notes", "created_at"];
+for (const req of requiredCols) {
+  if (!colNames.includes(req)) {
+    console.error(\`FAIL: Column \${req} is missing in tasks table!\`);
+    process.exit(1);
+  }
+}
+
+// 4. Verify Read Capabilities
 const rows = db.prepare("SELECT COUNT(*) AS total FROM tasks").get();
-if (rows.total < 1) {
+if (Number(rows.total) < 1) {
   console.error("FAIL: tasks table is empty, expected seed data!");
   process.exit(1);
 }
 
-// 4. Verify Write Capabilities (Insert & Delete)
-const insert = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, 0, ?)").run("Verification Probe Task", new Date().toISOString());
+// 5. Verify Write, Toggle, and Delete Capabilities
+const insert = db.prepare(\`
+  INSERT INTO tasks (title, category, priority, completed, notes, created_at)
+  VALUES (?, ?, ?, ?, ?, datetime('now'))
+\`).run("Verification Probe Task", "Engineering", "high", 0, "Test notes");
+
 const newId = insert.lastInsertRowid;
 if (!newId) {
   console.error("FAIL: Failed to insert record into SQLite tasks table!");
   process.exit(1);
 }
 
+// Toggle complete
+db.prepare("UPDATE tasks SET completed = 1 WHERE id = ?").run(newId);
+const updated = db.prepare("SELECT completed FROM tasks WHERE id = ?").get(newId);
+if (Number(updated.completed) !== 1) {
+  console.error("FAIL: Status toggle update failed!");
+  process.exit(1);
+}
+
+// Clean up
 const deleteAction = db.prepare("DELETE FROM tasks WHERE id = ?").run(newId);
 if (deleteAction.changes !== 1) {
   console.error("FAIL: Failed to delete verification probe record!");
@@ -1096,16 +1871,112 @@ process.exit(0);
       content: testJs
     });
 
-    // 4. README.md
+    // 7. workflow.test.js (Automated end-to-end workflow verification)
+    const workflowTestJs = `import http from "node:http";
+import { server } from "./server.js";
+
+function makeRequest(method, path, body) {
+  return new Promise((resolve, reject) => {
+    const address = server.address();
+    const port = address.port;
+    const options = {
+      hostname: "127.0.0.1",
+      port,
+      path,
+      method,
+      headers: { "Content-Type": "application/json" }
+    };
+    const req = http.request(options, (res) => {
+      let raw = "";
+      res.on("data", (chunk) => { raw += chunk; });
+      res.on("end", () => {
+        try {
+          resolve({ status: res.statusCode, data: raw ? JSON.parse(raw) : {} });
+        } catch {
+          resolve({ status: res.statusCode, data: raw });
+        }
+      });
+    });
+    req.on("error", reject);
+    if (body) req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
+async function runWorkflows() {
+  console.log("Running observable workflow verification tests...");
+
+  // Workflow 1: Health check
+  const healthRes = await makeRequest("GET", "/api/health");
+  if (healthRes.status !== 200) {
+    throw new Error("Health check failed with status " + healthRes.status);
+  }
+
+  // Workflow 2: Task creation with full attributes
+  const createRes = await makeRequest("POST", "/api/tasks", {
+    title: "Workflow Test Task",
+    category: "Engineering",
+    priority: "high",
+    notes: "Testing full workflow lifecycle"
+  });
+  if (createRes.status !== 201 || !createRes.data.id) {
+    throw new Error("Task creation returned " + createRes.status);
+  }
+  const taskId = createRes.data.id;
+
+  // Workflow 3: Status toggle to completed
+  const completeRes = await makeRequest("PATCH", "/api/tasks/" + taskId, { completed: true });
+  if (completeRes.status !== 200 || !completeRes.data.completed) {
+    throw new Error("Task completion returned " + completeRes.status);
+  }
+
+  // Workflow 4: Query filtering by status
+  const filterCompletedRes = await makeRequest("GET", "/api/tasks?filter=completed");
+  if (filterCompletedRes.status !== 200 || !Array.isArray(filterCompletedRes.data)) {
+    throw new Error("Filter completed returned " + filterCompletedRes.status);
+  }
+
+  // Workflow 5: Realtime analytics metrics
+  const analyticsRes = await makeRequest("GET", "/api/analytics");
+  if (analyticsRes.status !== 200 || analyticsRes.data.total < 1) {
+    throw new Error("Analytics returned " + analyticsRes.status);
+  }
+
+  // Clean up: delete task
+  await makeRequest("DELETE", "/api/tasks/" + taskId);
+  console.log("All observable task workflows verified successfully!");
+}
+
+server.listen(0, "127.0.0.1", () => {
+  runWorkflows()
+    .then(() => {
+      server.close();
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error("Workflow test failed:", err);
+      server.close();
+      process.exit(1);
+    });
+});
+`;
+
+    files.push({
+      relativePath: "workflow.test.js",
+      content: workflowTestJs
+    });
+
+    // 8. README.md
     const readmeMd = `# ${spec.title}
 
 Generated with **Agent App Forge** (Universal Node Engine).
 
 ## Features
-- Persistent local SQLite storage in WAL mode via \`node:sqlite\`.
-- Zero external runtime dependencies. Runs natively on Node.js 22+.
-- Full RESTful CRUD API endpoints (\`/api/tasks\`, \`/api/health\`).
-- Clean HTML5/CSS3 client interface.
+- **Persistent SQLite Storage:** Native Node.js \`node:sqlite\` with WAL mode.
+- **Task Management Lifecycle:** Create, view, filter (All, Active, Completed, High Priority), toggle (Complete/Reopen), and delete tasks.
+- **Multi-Attribute Records:** Retains title, category, priority, status, notes, and timestamps.
+- **Realtime Analytics:** \`/api/analytics\` metrics and header statistics badges.
+- **Zero Runtime Dependencies:** Runs natively on Node.js 22+.
 
 ## Quickstart
 \`\`\`bash
@@ -1117,6 +1988,7 @@ Visit http://localhost:3000 in your browser.
 ## Self-Verification Tests
 \`\`\`bash
 node test.js
+node workflow.test.js
 \`\`\`
 `;
 
@@ -1125,128 +1997,10 @@ node test.js
       content: readmeMd
     });
 
-    // 5. public/index.html
-    const indexHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${spec.title}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; color: #333; padding: 40px 20px; }
-    .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    h1 { margin-bottom: 8px; font-size: 1.8rem; color: #1a202c; }
-    p.desc { color: #718096; margin-bottom: 24px; font-size: 0.95rem; }
-    form { display: flex; gap: 10px; margin-bottom: 24px; }
-    input[type="text"] { flex: 1; padding: 12px 14px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 1rem; }
-    button { padding: 12px 20px; background: #3182ce; color: #fff; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: 500; }
-    button:hover { background: #2b6cb0; }
-    ul { list-style: none; }
-    li.task-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #edf2f7; }
-    li.task-item:last-child { border-bottom: none; }
-    .task-left { display: flex; align-items: center; gap: 12px; }
-    .task-title.done { text-decoration: line-through; color: #a0aec0; }
-    .btn-del { background: transparent; color: #e53e3e; padding: 4px 8px; font-size: 0.9rem; }
-    .btn-del:hover { background: #fff5f5; }
-    .status-bar { margin-top: 20px; font-size: 0.85rem; color: #a0aec0; text-align: center; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>${spec.title}</h1>
-    <p class="desc">${spec.description}</p>
-    
-    <form id="task-form">
-      <input type="text" id="task-input" placeholder="What needs to be done?" required />
-      <button type="submit">Add Item</button>
-    </form>
-
-    <ul id="task-list"></ul>
-
-    <div class="status-bar" id="task-count">0 items left</div>
-  </div>
-
-  <script>
-    const form = document.getElementById("task-form");
-    const input = document.getElementById("task-input");
-    const list = document.getElementById("task-list");
-    const countEl = document.getElementById("task-count");
-
-    async function loadTasks() {
-      try {
-        const res = await fetch("/api/tasks");
-        const tasks = await res.json();
-        renderTasks(tasks);
-      } catch (err) {
-        console.error("Failed to load tasks", err);
-      }
-    }
-
-    function renderTasks(tasks) {
-      list.innerHTML = "";
-      tasks.forEach((task) => {
-        const li = document.createElement("li");
-        li.className = "task-item";
-        li.innerHTML = \`
-          <div class="task-left">
-            <input type="checkbox" \${task.isDone ? "checked" : ""} onchange="toggleTask(\${task.id}, \${!task.isDone})" />
-            <span class="task-title \${task.isDone ? "done" : ""}">\${escapeHtml(task.title)}</span>
-          </div>
-          <button class="btn-del" onclick="deleteTask(\${task.id})">&times;</button>
-        \`;
-        list.appendChild(li);
-      });
-      const remaining = tasks.filter((t) => !t.isDone).length;
-      countEl.textContent = \`\${remaining} item\${remaining === 1 ? "" : "s"} left\`;
-    }
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const title = input.value.trim();
-      if (!title) return;
-      await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title })
-      });
-      input.value = "";
-      loadTasks();
-    });
-
-    window.toggleTask = async (id, isDone) => {
-      await fetch(\`/api/tasks/\${id}\`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isDone })
-      });
-      loadTasks();
-    };
-
-    window.deleteTask = async (id) => {
-      await fetch(\`/api/tasks/\${id}\`, { method: "DELETE" });
-      loadTasks();
-    };
-
-    function escapeHtml(str) {
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    loadTasks();
-  </script>
-</body>
-</html>
-`;
-
-    files.push({
-      relativePath: "public/index.html",
-      content: indexHtml
-    });
-
     return {
       engineName: this.name,
       files,
-      entryPointInstructions: "Run `node server.js` to launch at http://localhost:3000 (persistent SQLite backend)",
+      entryPointInstructions: `Run \`node server.js\` to launch ${spec.title} at http://localhost:3000 (persistent SQLite backend)`,
       supportedOnPlatform: true
     };
   }

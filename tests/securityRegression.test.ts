@@ -72,7 +72,11 @@ describe("Security & Reliability Regression Suite", () => {
   it("enforces minimum Node.js runtime version check for node:sqlite", () => {
     const prereqs = checkSystemPrerequisites();
     expect(prereqs.node.major).toBeGreaterThanOrEqual(22);
+    if (prereqs.node.major === 22) {
+      expect(prereqs.node.minor).toBeGreaterThanOrEqual(13);
+    }
     expect(prereqs.node.sqliteAvailable).toBe(true);
+    expect(prereqs.node.isSupported).toBe(true);
   });
 
   it("redacts potential secrets from verification logs and reports", async () => {

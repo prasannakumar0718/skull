@@ -240,16 +240,22 @@ export class ForgeVerifier {
                 CREATE TABLE IF NOT EXISTS tasks (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   title TEXT NOT NULL,
-                  isDone INTEGER NOT NULL DEFAULT 0,
-                  createdAt TEXT NOT NULL
+                  category TEXT DEFAULT 'General',
+                  priority TEXT DEFAULT 'medium',
+                  completed INTEGER DEFAULT 0,
+                  notes TEXT DEFAULT '',
+                  created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
               `);
                             const countRow = db.prepare("SELECT COUNT(*) AS count FROM tasks").get();
                             if (countRow.count === 0) {
-                                const seed = db.prepare("INSERT INTO tasks (title, isDone, createdAt) VALUES (?, 0, ?)");
-                                seed.run("Default task", new Date().toISOString());
+                                const seed = db.prepare(`
+                  INSERT INTO tasks (title, category, priority, completed, notes, created_at)
+                  VALUES (?, 'General', 'medium', 0, '', datetime('now'))
+                `);
+                                seed.run("Default task");
                             }
-                            repairedIssues.push("Initialized SQLite database schema in app.db");
+                            repairedIssues.push("Initialized SQLite database schema in app.db (tasks)");
                         }
                         appliedAny = true;
                     }

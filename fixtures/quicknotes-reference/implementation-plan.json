@@ -1,0 +1,143 @@
+{
+  "projectName": "live-mcp-quicknotes-verified",
+  "title": "QuickNotes Online",
+  "selectedEngine": "fullstack-node",
+  "engineRationale": "Universal Node Engine explicitly requested. Scaffolding zero-dependency Node HTTP + Native SQLite WAL architecture.",
+  "architecture": {
+    "frontend": "Interactive contenteditable rich-text canvas with formatting toolbar, autosave status, and document browser sidebar in Vanilla HTML5/CSS3/ESM",
+    "backend": "Zero-dependency Node HTTP REST server with document CRUD, autosave PATCH, and multi-format export (/api/documents/:id/export)",
+    "storage": "Native Node.js SQLite (node:sqlite) with WAL mode and Document + Revision relational schema",
+    "exportPipeline": "Server-side transforms to HTML, Markdown, Plain Text, and JSON"
+  },
+  "dependencies": [],
+  "tasks": [
+    {
+      "id": "task_1_storage",
+      "stage": 1,
+      "title": "Relational SQLite Storage & Schemas",
+      "description": "Set up persistent SQLite storage in app.db with table schemas for Record, Document.",
+      "targetFiles": [
+        "server.js",
+        "app.db"
+      ],
+      "acceptanceCriteria": [
+        "Tables created with IF NOT EXISTS and proper column types",
+        "PRAGMA journal_mode = WAL enabled for high concurrency",
+        "Initial seed data injected when database is empty"
+      ],
+      "provenance": "user_requested"
+    },
+    {
+      "id": "task_2_api_operations",
+      "stage": 2,
+      "title": "REST API Operations & Handlers",
+      "description": "Implement HTTP routes for queries and actions: getRecords, createRecord, deleteRecord.",
+      "targetFiles": [
+        "server.js"
+      ],
+      "acceptanceCriteria": [
+        "GET endpoints return JSON arrays with 200 OK",
+        "POST/PATCH endpoints validate required fields and return 201/200",
+        "Health check at /api/health reports status: ok and storage: sqlite"
+      ],
+      "provenance": "user_requested"
+    },
+    {
+      "id": "task_3_ui_and_workflows",
+      "stage": 3,
+      "title": "Interactive UI & User Workflows",
+      "description": "Build responsive client interface in public/ supporting observed workflows.",
+      "targetFiles": [
+        "public/index.html",
+        "public/style.css",
+        "public/app.js"
+      ],
+      "acceptanceCriteria": [
+        "User can interact with all primary application workflows",
+        "State updates automatically after server actions",
+        "Clean visual styling with responsive design"
+      ],
+      "provenance": "user_requested"
+    },
+    {
+      "id": "task_4_autosave",
+      "stage": 4,
+      "title": "Autosave & Document Recovery",
+      "description": "Implement debounced background autosave with visual status indicator (Saving... / Saved).",
+      "targetFiles": [
+        "public/app.js",
+        "server.js"
+      ],
+      "acceptanceCriteria": [
+        "Autosave triggers after typing pause (500ms)",
+        "Status indicator displays current persistence state",
+        "Document content persists across browser refresh and server restarts"
+      ],
+      "provenance": "user_requested"
+    },
+    {
+      "id": "task_5_export",
+      "stage": 5,
+      "title": "Multi-Format Document Export Pipeline",
+      "description": "Implement document export endpoint for HTML, Markdown, Plain Text, and JSON.",
+      "targetFiles": [
+        "server.js",
+        "public/app.js"
+      ],
+      "acceptanceCriteria": [
+        "GET /api/documents/:id/export?format=html returns standalone HTML document",
+        "GET /api/documents/:id/export?format=markdown returns markdown syntax",
+        "GET /api/documents/:id/export?format=text returns plain text content",
+        "GET /api/documents/:id/export?format=json returns structured document JSON"
+      ],
+      "provenance": "user_requested"
+    },
+    {
+      "id": "task_6_verification",
+      "stage": 6,
+      "title": "Automated Verification & Self-Testing",
+      "description": "Generate test.js and workflow.test.js to verify all acceptance criteria and workflows.",
+      "targetFiles": [
+        "test.js",
+        "workflow.test.js"
+      ],
+      "acceptanceCriteria": [
+        "test.js verifies database creation, table schemas, and data persistence",
+        "workflow.test.js executes each workflow sequence end-to-end against live endpoints",
+        "Verification exits with code 0 when all criteria pass"
+      ],
+      "provenance": "user_requested"
+    }
+  ],
+  "acceptanceCriteria": [
+    "Tables created with IF NOT EXISTS and proper column types",
+    "PRAGMA journal_mode = WAL enabled for high concurrency",
+    "Initial seed data injected when database is empty",
+    "GET endpoints return JSON arrays with 200 OK",
+    "POST/PATCH endpoints validate required fields and return 201/200",
+    "Health check at /api/health reports status: ok and storage: sqlite",
+    "User can interact with all primary application workflows",
+    "State updates automatically after server actions",
+    "Clean visual styling with responsive design",
+    "Autosave triggers after typing pause (500ms)",
+    "Status indicator displays current persistence state",
+    "Document content persists across browser refresh and server restarts",
+    "GET /api/documents/:id/export?format=html returns standalone HTML document",
+    "GET /api/documents/:id/export?format=markdown returns markdown syntax",
+    "GET /api/documents/:id/export?format=text returns plain text content",
+    "GET /api/documents/:id/export?format=json returns structured document JSON",
+    "test.js verifies database creation, table schemas, and data persistence",
+    "workflow.test.js executes each workflow sequence end-to-end against live endpoints",
+    "Verification exits with code 0 when all criteria pass",
+    "Record persists with ID",
+    "Form inputs validate and submit to endpoint without error",
+    "Application loads within 2 seconds",
+    "Controls render interactively"
+  ],
+  "knownUnknowns": [],
+  "limitations": [
+    "Live headless browser provider (Playwright/Puppeteer) not running; static DOM structure and observable network endpoints inspected via HTTP parser. Dynamic client-side SPA state transitions inferred.",
+    "Backend database structure inferred from observable web forms and REST endpoints; actual database storage is synthesized in native SQLite WAL mode."
+  ],
+  "createdAt": "2026-10-20T05:12:00.718Z"
+}

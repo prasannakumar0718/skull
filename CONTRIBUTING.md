@@ -9,14 +9,14 @@ Agent App Forge is an open-source, agent-agnostic infrastructure connecting reve
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- **Node.js**: `v22.0.0` or higher (`v24.19.0` recommended) with native `node:sqlite`.
+- **Node.js**: `v22.13.0` or higher (`v24.19.0` recommended) with native `node:sqlite`.
 - **Git**: Recent version.
 - **Platform**: Windows, macOS, or Linux.
 
 ### Getting Started
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<owner>/agent-app-forge.git
+git clone https://github.com/prasannakumar0718/skull.git
 cd agent-app-forge
 
 # 2. Install dev dependencies

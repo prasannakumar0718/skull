@@ -47,12 +47,16 @@ describe("Agent App Forge - Real MCP Protocol Integration Suite", () => {
     const response = await client.listTools();
     const toolNames = response.tools.map((t) => t.name);
 
+    expect(toolNames).toContain("forge_capabilities");
     expect(toolNames).toContain("forge_inspect_reference");
     expect(toolNames).toContain("forge_create_spec");
     expect(toolNames).toContain("forge_generate_app");
     expect(toolNames).toContain("forge_verify_app");
+    expect(toolNames).toContain("forge_recreate_app");
+    expect(toolNames).toContain("forge_rea_discover");
     expect(toolNames).toContain("forge_rea_tool");
     expect(toolNames).toContain("forge_wasp_cli");
+    expect(response.tools.length).toBe(9);
 
     for (const tool of response.tools) {
       expect(tool.description).toBeTruthy();
@@ -189,12 +193,14 @@ describe("Agent App Forge - Real MCP Protocol Integration Suite", () => {
     try {
       await stdioClient.connect(stdioTransport);
       const toolList = await stdioClient.listTools();
-      expect(toolList.tools.length).toBe(214);
+      // Default compact mode exposes 9 core tools
+      expect(toolList.tools.length).toBe(9);
+      expect(toolList.tools.some((t) => t.name === "forge_capabilities")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "forge_create_spec")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "forge_recreate_app")).toBe(true);
+      expect(toolList.tools.some((t) => t.name === "forge_rea_discover")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "forge_rea_tool")).toBe(true);
       expect(toolList.tools.some((t) => t.name === "forge_wasp_cli")).toBe(true);
-      expect(toolList.tools.some((t) => t.name === "rea_inspect_sqlite_database")).toBe(true);
     } finally {
       await stdioClient.close();
     }

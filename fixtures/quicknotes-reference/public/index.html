@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuickNotes Online</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <input type="text" id="doc-title" class="doc-title-input" value="Welcome Document" placeholder="Untitled Document" />
+      <span id="save-status" class="badge badge-saved">Saved</span>
+      <span id="word-count" class="badge badge-words">0 words</span>
+    </div>
+    <div class="header-right">
+      <button id="btn-new" class="btn btn-secondary">+ New Document</button>
+      <div class="dropdown">
+        <button id="btn-export" class="btn btn-primary">Export &#9662;</button>
+        <div id="export-menu" class="dropdown-menu">
+          <a href="#" data-format="html">HTML Document (.html)</a>
+          <a href="#" data-format="markdown">Markdown (.md)</a>
+          <a href="#" data-format="doc">Microsoft Word (.doc)</a>
+          <a href="#" data-format="print">Print / PDF (.pdf)</a>
+          <a href="#" data-format="text">Plain Text (.txt)</a>
+          <a href="#" data-format="json">JSON Metadata (.json)</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button class="tool-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+    <button class="tool-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+    <button class="tool-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+    <button class="tool-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+    <span class="tool-divider"></span>
+    <button class="tool-btn" data-cmd="formatBlock" data-val="h1" title="Heading 1">H1</button>
+    <button class="tool-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2">H2</button>
+    <button class="tool-btn" data-cmd="formatBlock" data-val="p" title="Paragraph">¶</button>
+    <span class="tool-divider"></span>
+    <button class="tool-btn" data-cmd="insertUnorderedList" title="Bullet List">• List</button>
+    <button class="tool-btn" data-cmd="insertOrderedList" title="Numbered List">1. List</button>
+    <button class="tool-btn" data-cmd="formatBlock" data-val="blockquote" title="Quote">“ Quote</button>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <h3>Documents</h3>
+      <ul id="doc-list" class="doc-list"></ul>
+    </aside>
+    <main class="editor-container">
+      <div id="editor-canvas" class="editor-canvas" contenteditable="true" spellcheck="true"></div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

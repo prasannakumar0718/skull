@@ -57,10 +57,11 @@ export class RecreationOrchestrator {
     const baseSpec = createSpecFromPrompt(prompt, path.basename(resolvedOut));
 
     // Merge observed entities & workflows if reference-driven
-    const mergedEntities = [...baseSpec.entities];
-    for (const obsEnt of investigation.inferredEntities) {
-      if (!mergedEntities.some(e => e.name.toLowerCase() === obsEnt.name.toLowerCase())) {
-        mergedEntities.push(obsEnt);
+    // Prioritize observed entities discovered from reference code or SQLite schema
+    const mergedEntities = [...investigation.inferredEntities];
+    for (const baseEnt of baseSpec.entities) {
+      if (!mergedEntities.some(e => e.name.toLowerCase() === baseEnt.name.toLowerCase())) {
+        mergedEntities.push(baseEnt);
       }
     }
 
@@ -76,12 +77,60 @@ export class RecreationOrchestrator {
       ...investigation.observedCapabilities
     ]));
 
+    // Use observed application title from evidence if available (browser investigation or static HTML markup)
+    let resolvedTitle = baseSpec.title;
+    const titleEvidence = investigation.evidence.find(
+      e => e.findings && (typeof (e.findings as any).pageTitle === "string" || typeof (e.findings as any).title === "string")
+    );
+    if (titleEvidence) {
+      const observedTitle = (titleEvidence.findings as any).pageTitle || (titleEvidence.findings as any).title;
+      if (observedTitle && typeof observedTitle === "string" && observedTitle.trim()) {
+        resolvedTitle = observedTitle.trim();
+      }
+    }
+
+    const isReferenceTask =
+      investigation.inferredEntities.some(e => /task/i.test(e.name)) ||
+      investigation.observedCapabilities.includes("task-management") ||
+      /task/i.test(prompt);
+
+    let finalDomain = baseSpec.metadata?.domain;
+    if (isReferenceTask) {
+      finalDomain = "task-management";
+    }
+
+    const filteredEntities = mergedEntities.filter(e => {
+      if (isReferenceTask && (e.name === "Document" || e.name === "Revision")) {
+        return false;
+      }
+      return true;
+    });
+
+    const filteredWorkflows = mergedWorkflows.filter(w => {
+      if (isReferenceTask && (w.id === "wf_doc_editing" || w.id === "wf_edit_save" || w.id === "wf_create_rename")) {
+        return false;
+      }
+      return true;
+    });
+
+    const filteredCapabilities = mergedCapabilities.filter(c => {
+      if (isReferenceTask && (c === "rich-text-editing" || c === "document-management" || c === "document-export" || c === "version-history")) {
+        return false;
+      }
+      return true;
+    });
+
     const spec: ForgeSpec = {
       ...baseSpec,
+      title: resolvedTitle,
+      metadata: {
+        ...baseSpec.metadata,
+        domain: finalDomain || "general"
+      },
       targetEngine: options.targetEngine || baseSpec.targetEngine,
-      entities: mergedEntities,
-      workflows: mergedWorkflows,
-      capabilities: mergedCapabilities.length > 0 ? mergedCapabilities : undefined,
+      entities: filteredEntities,
+      workflows: filteredWorkflows,
+      capabilities: filteredCapabilities.length > 0 ? filteredCapabilities : undefined,
       coverageAssessment: investigation.coverageAssessment
     };
 

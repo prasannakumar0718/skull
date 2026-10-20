@@ -5,34 +5,68 @@ import { createSpecFromPrompt, validateForgeSpec } from "../spec/validator.js";
 import { EngineOrchestrator } from "../engines/orchestrator.js";
 import { ReaInvestigationBridge } from "../investigation/reaBridge.js";
 import { ForgeVerifier } from "../verifier/verifier.js";
+import { checkSystemPrerequisites } from "../utils/prerequisites.js";
 import * as path from "node:path";
-export function createForgeMcpServer(reaPath) {
+export const FORGE_SERVER_INSTRUCTIONS = "Agent App Forge is an agent-agnostic software recreation and application-generation toolkit. " +
+    "For an existing application, inspect the authorized reference and use forge_recreate_app to plan, build, and verify an independent implementation. " +
+    "For new applications, use forge_create_spec and forge_generate_app. Use forge_verify_app to test results. " +
+    "Discover and invoke native REA tools when deeper investigation is required. " +
+    "Wasp and other engines remain separately accessible. Report evidence, failures, and unknowns honestly.";
+export function createForgeMcpServer(optionsOrReaPath) {
+    let reaPath;
+    let mode = process.env.FORGE_MCP_MODE || "compact";
+    if (typeof optionsOrReaPath === "string") {
+        reaPath = optionsOrReaPath;
+    }
+    else if (typeof optionsOrReaPath === "object" && optionsOrReaPath !== null) {
+        reaPath = optionsOrReaPath.reaPath;
+        if (optionsOrReaPath.mode) {
+            mode = optionsOrReaPath.mode;
+        }
+    }
     const server = new Server({
         name: "io.github.agent-app-forge/server",
         version: "0.1.0"
     }, {
         capabilities: {
             tools: {}
-        }
+        },
+        instructions: FORGE_SERVER_INSTRUCTIONS
     });
     const orchestrator = new EngineOrchestrator();
     const verifier = new ForgeVerifier();
     const investigationBridge = new ReaInvestigationBridge(reaPath);
-    const tools = [
+    // 9 Core Forge Tools (Default Compact Catalog)
+    const coreTools = [
         {
-            name: "forge_inspect_reference",
-            description: "Inspect an existing reference software project using REA investigation bridge to extract schemas, routes, and behavior.",
+            name: "forge_capabilities",
+            description: "Explain Agent App Forge's primary purpose, 8-step workflow (INVESTIGATE -> UNDERSTAND -> SPECIFY -> PLAN -> BUILD -> VERIFY -> COMPARE -> IMPROVE), available engines (Universal Node Engine, Wasp), active MCP mode (compact vs full), and system prerequisites.",
             inputSchema: {
                 type: "object",
                 properties: {
-                    referencePath: { type: "string", description: "Absolute path to reference directory or file" }
+                    detail: {
+                        type: "string",
+                        enum: ["summary", "full", "engines", "modes"],
+                        description: "Level of detail requested (default: summary)",
+                        default: "summary"
+                    }
+                }
+            }
+        },
+        {
+            name: "forge_inspect_reference",
+            description: "Investigate an authorized reference application or codebase using REA reverse engineering tools to extract data models, routes, database schemas, and observable behaviors.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    referencePath: { type: "string", description: "Absolute path to reference directory, SQLite DB, or code fixture" }
                 },
                 required: ["referencePath"]
             }
         },
         {
             name: "forge_create_spec",
-            description: "Convert a natural-language application request into a validated, editable ForgeSpec.",
+            description: "Convert a natural-language application request into a validated, strongly typed ForgeSpec schema defining entities, operations, and user workflows.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -43,55 +77,8 @@ export function createForgeMcpServer(reaPath) {
             }
         },
         {
-            name: "forge_generate_app",
-            description: "Generate a complete, running web application from a validated ForgeSpec.",
-            inputSchema: {
-                type: "object",
-                properties: {
-                    spec: { type: "object", description: "Validated ForgeSpec JSON" },
-                    outputDirectory: { type: "string", description: "Directory where application will be generated" }
-                },
-                required: ["spec", "outputDirectory"]
-            }
-        },
-        {
-            name: "forge_verify_app",
-            description: "Run automated structural and test verification checks on a generated application and attempt focused repairs.",
-            inputSchema: {
-                type: "object",
-                properties: {
-                    projectDirectory: { type: "string", description: "Path to generated application" }
-                },
-                required: ["projectDirectory"]
-            }
-        },
-        {
-            name: "forge_rea_tool",
-            description: "Delegate invocation directly to any native REA MCP tool (supports all 207 tools across REA's full inventory, e.g., inspect_sqlite_database, inspect_artifact, analyze_function, compare_artifacts).",
-            inputSchema: {
-                type: "object",
-                properties: {
-                    toolName: { type: "string", description: "Name of the REA tool to invoke (e.g. inspect_sqlite_database, inspect_artifact, analyze_function)" },
-                    toolArguments: { type: "object", description: "Arguments payload matching the REA tool schema" }
-                },
-                required: ["toolName", "toolArguments"]
-            }
-        },
-        {
-            name: "forge_wasp_cli",
-            description: "Delegate a native Wasp CLI command (e.g., compile, clean, version) directly to Wasp.",
-            inputSchema: {
-                type: "object",
-                properties: {
-                    command: { type: "string", description: "Wasp command, e.g., 'version', 'clean', 'compile'" },
-                    projectDirectory: { type: "string", description: "Path to Wasp project directory" }
-                },
-                required: ["command"]
-            }
-        },
-        {
             name: "forge_recreate_app",
-            description: "Investigate reference software using REA, plan architecture, generate full-stack application, and compare observable behavior.",
+            description: "Coordinate the complete software recreation lifecycle: investigate reference with REA, generate specification with provenance, formulate implementation plan, synthesize independent application, run verifier, and compare observable behavior.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -104,17 +91,78 @@ export function createForgeMcpServer(reaPath) {
                 },
                 required: ["prompt", "outputDirectory"]
             }
+        },
+        {
+            name: "forge_generate_app",
+            description: "Generate a complete, running, standalone full-stack web application with persistent SQLite WAL storage from a validated ForgeSpec.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    spec: { type: "object", description: "Validated ForgeSpec JSON" },
+                    outputDirectory: { type: "string", description: "Directory where application will be generated" }
+                },
+                required: ["spec", "outputDirectory"]
+            }
+        },
+        {
+            name: "forge_verify_app",
+            description: "Run automated structural verification checks, test suites, and self-repair loops on a generated project, returning detailed pass/fail diagnostics.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    projectDirectory: { type: "string", description: "Path to generated application" }
+                },
+                required: ["projectDirectory"]
+            }
+        },
+        {
+            name: "forge_rea_discover",
+            description: "Search and discover relevant native REA (Reverse Engineer Anything) tools from REA's 207-tool inventory by keyword, category, or target type. Returns matching tool names, descriptions, and full input schemas for execution via forge_rea_tool.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    query: { type: "string", description: "Search query matching tool name, description, or keywords (e.g. 'sqlite', 'binary', 'android', 'frida', 'decompilation')" },
+                    category: { type: "string", description: "Filter by functional category: 'database', 'web', 'android', 'binary', 'procedure', 'dynamic', 'network', 'reconstruction', 'analysis'" },
+                    targetType: { type: "string", description: "Filter by target file/artifact type (e.g., 'sqlite', 'pe', 'apk', 'wasm', 'pcap', 'js')" },
+                    limit: { type: "number", description: "Maximum number of tools to return (default: 10, max: 50)", default: 10 },
+                    refresh: { type: "boolean", description: "Force refresh discovery from live REA MCP runtime", default: false }
+                }
+            }
+        },
+        {
+            name: "forge_rea_tool",
+            description: "Execute any supported native REA reverse-engineering tool (all 207 tools across REA's inventory, e.g., inspect_sqlite_database, inspect_artifact, analyze_function, compare_artifacts) with original arguments preserved. Accepts structured or serialized JSON arguments.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    toolName: { type: "string", description: "Name of the native REA tool to invoke (e.g. 'inspect_sqlite_database', 'inspect_artifact', 'analyze_function')" },
+                    toolArguments: { description: "Arguments payload matching the REA tool schema (object or serialized JSON string)" }
+                },
+                required: ["toolName", "toolArguments"]
+            }
+        },
+        {
+            name: "forge_wasp_cli",
+            description: "Delegate supported native Wasp CLI commands (e.g., 'compile', 'clean', 'version') directly to Wasp, reporting platform requirements truthfully.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    command: { type: "string", description: "Wasp command, e.g., 'version', 'clean', 'compile'" },
+                    projectDirectory: { type: "string", description: "Path to Wasp project directory" }
+                },
+                required: ["command"]
+            }
         }
     ];
-    // Dynamically expose all 207 native REA tools with collision-safe names 'rea_<name>'
+    // Dynamically prepare all 207 native REA tools with collision-safe names 'rea_<name>' for full mode
     const nativeReaTools = investigationBridge.listSupportedReaTools().map((t) => ({
         name: `rea_${t.name}`,
         description: `[Upstream REA Native Tool] ${t.description}`,
         inputSchema: t.inputSchema
     }));
-    const allTools = [...tools, ...nativeReaTools];
+    const advertisedTools = mode === "full" ? [...coreTools, ...nativeReaTools] : coreTools;
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: allTools
+        tools: advertisedTools
     }));
     server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const { name, arguments: args } = request.params;
@@ -125,13 +173,72 @@ export function createForgeMcpServer(reaPath) {
             };
         }
         try {
-            // Direct collision-safe REA native tool invocation
+            // Direct collision-safe REA native tool invocation (supported in BOTH compact and full modes)
             if (name.startsWith("rea_")) {
                 const upstreamName = name.slice(4);
                 const reaResult = await investigationBridge.callReaNativeTool(upstreamName, (args || {}), extra?.signal);
                 return {
                     isError: reaResult.isError,
                     content: [{ type: "text", text: JSON.stringify(reaResult.data ?? reaResult, null, 2) }]
+                };
+            }
+            if (name === "forge_capabilities") {
+                const prereqs = checkSystemPrerequisites();
+                const catalogMeta = investigationBridge.getCatalogMetadata();
+                const payload = {
+                    name: "agent-app-forge",
+                    version: "0.1.0",
+                    purpose: "Agent-agnostic software recreation, reverse engineering, and fullstack application synthesis system with autonomous verification and MCP tooling.",
+                    workflow: "INVESTIGATE -> UNDERSTAND -> SPECIFY -> PLAN -> BUILD -> VERIFY -> COMPARE -> IMPROVE",
+                    mcp: {
+                        activeMode: mode,
+                        availableModes: {
+                            compact: "Default mode exposing 9 core Forge tools (<4 KB payload, ~1,100 tokens). Discovers all 207 REA tools dynamically via forge_rea_discover.",
+                            full: "Exposes all 216 tools (9 core + 207 individual rea_<name> tools). Opt-in via --mode full or FORGE_MCP_MODE=full."
+                        },
+                        toolsAdvertisedInSession: advertisedTools.length,
+                        totalReaToolsAvailable: catalogMeta.toolCount,
+                        instructions: FORGE_SERVER_INSTRUCTIONS
+                    },
+                    engines: {
+                        "universal-node": {
+                            name: "Universal Fullstack Node Engine",
+                            supported: true,
+                            storage: "Native SQLite (WAL Mode via node:sqlite)",
+                            dependencies: "Zero external runtime npm packages",
+                            platforms: ["win32", "darwin", "linux"]
+                        },
+                        wasp: {
+                            name: "Wasp Web Framework Engine",
+                            supported: true,
+                            platforms: ["linux", "darwin", "win32-wsl"],
+                            installedOnHost: prereqs.wasp.installed,
+                            notes: prereqs.wasp.notes
+                        }
+                    },
+                    prerequisites: {
+                        node: prereqs.node,
+                        sqliteAvailable: prereqs.node.sqliteAvailable,
+                        wasp: prereqs.wasp,
+                        rea: prereqs.rea
+                    }
+                };
+                return {
+                    content: [{ type: "text", text: JSON.stringify(payload, null, 2) }]
+                };
+            }
+            if (name === "forge_rea_discover") {
+                if (args?.refresh === true) {
+                    await investigationBridge.refreshDiscovery();
+                }
+                const searchResult = investigationBridge.searchReaTools({
+                    query: typeof args?.query === "string" ? args.query.trim() : undefined,
+                    category: typeof args?.category === "string" ? args.category.trim() : undefined,
+                    targetType: typeof args?.targetType === "string" ? args.targetType.trim() : undefined,
+                    limit: typeof args?.limit === "number" ? args.limit : 10
+                });
+                return {
+                    content: [{ type: "text", text: JSON.stringify(searchResult, null, 2) }]
                 };
             }
             if (name === "forge_inspect_reference") {
@@ -230,16 +337,57 @@ export function createForgeMcpServer(reaPath) {
                 };
             }
             if (name === "forge_rea_tool") {
-                if (!args || typeof args.toolName !== "string" || !args.toolArguments || typeof args.toolArguments !== "object") {
+                if (!args || typeof args.toolName !== "string" || !args.toolName.trim()) {
                     return {
                         isError: true,
-                        content: [{ type: "text", text: "Invalid arguments: 'toolName' string and 'toolArguments' object are required." }]
+                        content: [{ type: "text", text: "Invalid arguments: 'toolName' non-empty string is required." }]
                     };
                 }
-                const reaResult = await investigationBridge.callReaNativeTool(args.toolName, args.toolArguments, extra?.signal);
+                // Support both structured objects and serialized JSON strings (Requirement 6)
+                let parsedArgs;
+                if (typeof args.toolArguments === "string") {
+                    try {
+                        parsedArgs = JSON.parse(args.toolArguments);
+                    }
+                    catch (err) {
+                        return {
+                            isError: true,
+                            content: [{ type: "text", text: `Invalid arguments: 'toolArguments' JSON string could not be parsed: ${err.message}` }]
+                        };
+                    }
+                }
+                else if (args.toolArguments && typeof args.toolArguments === "object" && !Array.isArray(args.toolArguments)) {
+                    parsedArgs = args.toolArguments;
+                }
+                else {
+                    return {
+                        isError: true,
+                        content: [{ type: "text", text: "Invalid arguments: 'toolArguments' must be a valid JSON object or serialized JSON string." }]
+                    };
+                }
+                const targetToolName = args.toolName.trim();
+                // Validate required fields against known schema before delegating
+                const supportedTools = investigationBridge.listSupportedReaTools();
+                const toolDef = supportedTools.find((t) => t.name === targetToolName);
+                if (toolDef && toolDef.inputSchema && Array.isArray(toolDef.inputSchema.required)) {
+                    const requiredFields = toolDef.inputSchema.required;
+                    const missing = requiredFields.filter((f) => parsedArgs[f] === undefined || parsedArgs[f] === null);
+                    if (missing.length > 0) {
+                        return {
+                            isError: true,
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `Schema validation error for REA tool '${targetToolName}': Missing required argument(s) [${missing.join(", ")}].`
+                                }
+                            ]
+                        };
+                    }
+                }
+                const reaResult = await investigationBridge.callReaNativeTool(targetToolName, parsedArgs, extra?.signal);
                 return {
                     isError: reaResult.isError,
-                    content: [{ type: "text", text: JSON.stringify(reaResult, null, 2) }]
+                    content: [{ type: "text", text: JSON.stringify(reaResult.data ?? reaResult, null, 2) }]
                 };
             }
             if (name === "forge_wasp_cli") {
@@ -249,7 +397,6 @@ export function createForgeMcpServer(reaPath) {
                         content: [{ type: "text", text: "Invalid arguments: 'command' string is required." }]
                     };
                 }
-                const { checkSystemPrerequisites } = await import("../utils/prerequisites.js");
                 const prereqs = checkSystemPrerequisites();
                 if (!prereqs.wasp.installed) {
                     return {
@@ -307,8 +454,8 @@ export function createForgeMcpServer(reaPath) {
     });
     return server;
 }
-export async function runForgeMcpServer(reaPath) {
-    const server = createForgeMcpServer(reaPath);
+export async function runForgeMcpServer(optionsOrReaPath) {
+    const server = createForgeMcpServer(optionsOrReaPath);
     const transport = new StdioServerTransport();
     await server.connect(transport);
 }

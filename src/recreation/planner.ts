@@ -143,6 +143,68 @@ export class ImplementationPlanner {
           provenance: "user_requested"
         }
       );
+    } else {
+      // Map observed workflows for record/task applications into explicit planned tasks
+      for (const wf of spec.workflows || []) {
+        if (wf.id === "wf_view_filtering") {
+          tasks.push({
+            id: "task_view_filtering",
+            stage: 3,
+            title: "Multi-View & Status Filtering Controls",
+            description: "Implement interactive filter buttons (All Tasks, Active, Completed, High Priority) and client-side list filtering.",
+            targetFiles: ["public/index.html", "public/app.js", "server.js"],
+            acceptanceCriteria: [
+              "All filter buttons (All Tasks, Active, Completed, High Priority) render and switch active state",
+              "Task list filters dynamically without full page refresh",
+              "Counters update to reflect active filter counts"
+            ],
+            provenance: wf.provenance || "observed"
+          });
+        } else if (wf.id === "wf_status_lifecycle") {
+          tasks.push({
+            id: "task_status_lifecycle",
+            stage: 3,
+            title: "Status Lifecycle and Action Buttons",
+            description: "Implement Complete / Reopen status transition toggle buttons and strike-through styling.",
+            targetFiles: ["public/app.js", "server.js"],
+            acceptanceCriteria: [
+              "Complete button toggles task to completed state",
+              "Reopen button reverts completed task to active state",
+              "PATCH request persists status changes to SQLite database"
+            ],
+            provenance: wf.provenance || "observed"
+          });
+        } else if (wf.id === "wf_record_deletion") {
+          tasks.push({
+            id: "task_record_deletion",
+            stage: 3,
+            title: "Record Deletion & Confirmation",
+            description: "Implement Delete action button on items and DELETE API endpoint handler.",
+            targetFiles: ["public/app.js", "server.js"],
+            acceptanceCriteria: [
+              "Delete button sends DELETE /api/tasks/:id",
+              "Item is removed from SQLite database and DOM immediately"
+            ],
+            provenance: wf.provenance || "observed"
+          });
+        }
+      }
+    }
+
+    if (investigation.observedCapabilities.includes("browser-verified-ui") || investigation.observedCapabilities.includes("responsive-layout")) {
+      tasks.push({
+        id: "task_visual_responsive_parity",
+        stage: 4,
+        title: "Visual Hierarchy and Responsive Layout Parity",
+        description: "Verify layout hierarchy and interactive controls at desktop (1280x720) and mobile (375x667) viewports.",
+        targetFiles: ["public/style.css", "public/index.html"],
+        acceptanceCriteria: [
+          "Desktop layout presents header, formatting toolbar, document sidebar, and editor canvas",
+          "Mobile layout adapts to 375px viewport with media query breakpoints and zero horizontal overflow",
+          "Controls and buttons match observed reference hierarchy"
+        ],
+        provenance: "observed"
+      });
     }
 
     tasks.push({
