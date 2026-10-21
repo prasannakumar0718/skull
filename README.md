@@ -3,8 +3,9 @@
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.13.0-brightgreen.svg)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Protocol](https://img.shields.io/badge/MCP-1.6.1-blue.svg)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/Release-v0.1.1-blue.svg)](https://github.com/prasannakumar0718/skull)
 [![REA Parity](https://img.shields.io/badge/REA%20Tools-207%2F207%20Parity-success.svg)](https://github.com/prasannakumar0718/skull)
-[![Tests](https://img.shields.io/badge/Tests-121%2F121%20Passing-brightgreen.svg)](https://github.com/agent-app-forge)
+[![Tests](https://img.shields.io/badge/Tests-143%2F143%20Passing-brightgreen.svg)](https://github.com/prasannakumar0718/skull)
 
 > **Agent-agnostic software recreation, reverse-engineering analysis, and declarative full-stack application synthesis system with autonomous verification and Model Context Protocol (MCP) tooling.**
 
@@ -225,6 +226,8 @@ See [config/agent-compatibility.json](config/agent-compatibility.json) for machi
 
 ## 📄 Documentation
 
+- [**Beginner's Quick-Start Guide**](docs/USER_QUICKSTART.md) ⭐
+- [Release Notes v0.1.1](docs/releases/v0.1.1.md)
 - [Capabilities & Inventory](docs/CAPABILITY_MATRIX.md)
 - [Architecture & Design](docs/ARCHITECTURE.md)
 - [Software Recreation Architecture](docs/RECREATION_ARCHITECTURE.md)
