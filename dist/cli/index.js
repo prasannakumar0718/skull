@@ -12,7 +12,7 @@ export function createCli() {
     program
         .name("forge")
         .description("Agent App Forge: AI Coding-Agent Infrastructure for Reverse Engineering & App Synthesis")
-        .version("0.1.0")
+        .version("0.1.1")
         .enablePositionalOptions();
     program
         .command("mcp")
@@ -242,7 +242,7 @@ export function createCli() {
         const prereqs = checkSystemPrerequisites();
         const data = {
             name: "agent-app-forge",
-            version: "0.1.0",
+            version: "0.1.1",
             engines: {
                 "universal-node": {
                     name: "Universal Fullstack Node Engine",

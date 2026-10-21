@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.1] - 2026-10-21
+
+### Added
+- **Zero-Configuration Experience (Phase 15)**:
+  - Natural-language request classification into generation, recreation, modification, or analysis.
+  - Automatic URL and filesystem path extraction, initiating deep browser and source inspection without manual tool orchestration.
+- **Dedicated Domain Synthesis Engines (Phase 16)**:
+  - `contentPageTemplate`: Dedicated responsive static/informational content portal engine with SQLite WAL persistence, typographic hierarchy, and zero fabricated task controls.
+  - `apiDocsTemplate`: Dedicated interactive API explorer and service documentation engine with Swagger-like HTTP method badges, dynamic request probing, and SQLite metrics tracking.
+  - `studentManagementTemplate`: Academic directory, attendance tracking, and fee status management engine.
+- **Dual-Track Verification Pipeline (Phase 16)**:
+  - Strict decoupling of **Generated Application Quality** (server start, route responsiveness, WAL persistence, reboot survival) from **Reference Fidelity** (headings, links, control parity, responsive layout).
+  - Enforced parity rule: Application Quality PASS never masks Reference Fidelity FAIL.
+  - Anti-fabrication penalty (Rule 5): Penalizes synthesis of unobserved interactive controls on read-only reference pages.
+
+### Changed
+- **Brand-Neutral Generalization (Phase 17 & 17.1)**:
+  - Completely removed hardcoded website names (`httpbin`, `todomvc`) from classification, engine routing, and comparator logic.
+  - Structural API documentation detection using observable Swagger/OpenAPI elements (`Expand operation`, `Try it out`, `Execute`, `curl`, method badges).
+  - Structural minimalist task detection and dynamic evidence-based footer generation (preserves reference links only when supported by observed evidence or explicit user requests).
+
+### Fixed
+- Fixed Swagger operation buttons and reference external links preservation on API documentation targets, raising HTTPBin reference fidelity score to 1.00.
+- Fixed TodoMVC state-dependent button recall, removing 8 fabricated buttons from the default state view.
+- Ensured symmetric link extraction and counting rules across reference and recreation targets.
+
 ## [0.1.0] - 2026-10-19
 
 ### Added

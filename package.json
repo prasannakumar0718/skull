@@ -1,6 +1,6 @@
 {
   "name": "agent-app-forge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent-agnostic software recreation, reverse engineering, and declarative full-stack application synthesis system with autonomous verification and MCP tooling.",
   "type": "module",
   "main": "dist/index.js",

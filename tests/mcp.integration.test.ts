@@ -39,7 +39,7 @@ describe("Agent App Forge - Real MCP Protocol Integration Suite", () => {
   it("completes MCP initialization and capability negotiation", () => {
     expect(client.getServerVersion()).toEqual({
       name: "io.github.agent-app-forge/server",
-      version: "0.1.0"
+      version: "0.1.1"
     });
   });
 

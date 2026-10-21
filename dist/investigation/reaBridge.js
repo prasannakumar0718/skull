@@ -683,7 +683,7 @@ export class ReaInvestigationBridge {
         });
         const client = new Client({
             name: "forge-rea-delegator",
-            version: "0.1.0"
+            version: "0.1.1"
         }, { capabilities: {} });
         if (abortSignal?.aborted) {
             throw new Error("Operation cancelled prior to transport connection.");

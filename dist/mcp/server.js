@@ -26,7 +26,7 @@ export function createForgeMcpServer(optionsOrReaPath) {
     }
     const server = new Server({
         name: "io.github.agent-app-forge/server",
-        version: "0.1.0"
+        version: "0.1.1"
     }, {
         capabilities: {
             tools: {}
@@ -187,7 +187,7 @@ export function createForgeMcpServer(optionsOrReaPath) {
                 const catalogMeta = investigationBridge.getCatalogMetadata();
                 const payload = {
                     name: "agent-app-forge",
-                    version: "0.1.0",
+                    version: "0.1.1",
                     purpose: "Agent-agnostic software recreation, reverse engineering, and fullstack application synthesis system with autonomous verification and MCP tooling.",
                     workflow: "INVESTIGATE -> UNDERSTAND -> SPECIFY -> PLAN -> BUILD -> VERIFY -> COMPARE -> IMPROVE",
                     mcp: {
