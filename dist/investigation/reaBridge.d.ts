@@ -134,6 +134,10 @@ export declare class ReaInvestigationBridge {
         remediation?: string;
     }>;
     /**
+     * Native node:sqlite fallback inspection when upstream REA capability is unavailable on older Node versions.
+     */
+    private executeNativeSqliteFallback;
+    /**
      * Directly invokes the real upstream REA MCP server via StdioClientTransport.
      */
     private invokeReaMcpTool;

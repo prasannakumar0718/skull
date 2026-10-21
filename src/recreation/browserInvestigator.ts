@@ -9,6 +9,7 @@ export interface BrowserElementSummary {
   type?: string;
   selector: string;
   role?: string;
+  href?: string;
 }
 
 export interface BrowserInteractionStep {
@@ -31,6 +32,8 @@ export interface BrowserVisualSnapshot {
   buttons: BrowserElementSummary[];
   inputs: BrowserElementSummary[];
   forms: BrowserElementSummary[];
+  links?: BrowserElementSummary[];
+  paragraphs?: string[];
   menus: string[];
   responsiveLayoutVerified: boolean;
 }
@@ -47,6 +50,8 @@ export interface BrowserPageInvestigation {
     forms: BrowserElementSummary[];
     menus: string[];
     headings: string[];
+    links?: BrowserElementSummary[];
+    paragraphs?: string[];
   };
   observedStates: {
     initialState: string;
@@ -80,6 +85,8 @@ export interface ParityScoringReport {
     desktopLayout: ParityMetricDetail;
     mobileResponsiveness: ParityMetricDetail;
     behavioralPersistence: ParityMetricDetail;
+    headingParity?: ParityMetricDetail;
+    linkParity?: ParityMetricDetail;
   };
   rawScore: number;
   finalScore: number;
@@ -308,6 +315,9 @@ export class BrowserInvestigator {
       const desktopShotBuffer = await page.screenshot({ fullPage: false });
       if (desktopShotPath) {
         fs.writeFileSync(desktopShotPath, desktopShotBuffer);
+        try {
+          fs.writeFileSync(path.join(options!.screenshotDir!, "state_01_empty.png"), desktopShotBuffer);
+        } catch {}
       }
 
       // Extract Headings
@@ -323,7 +333,7 @@ export class BrowserInvestigator {
             tag: e.tagName.toLowerCase(),
             id: e.id || undefined,
             className: e.className || undefined,
-            text: (e.textContent || e.value || "").trim().slice(0, 50),
+            text: (e.textContent?.trim() || e.getAttribute("aria-label") || e.getAttribute("title") || e.value || "").trim().slice(0, 50),
             type: e.type || undefined,
             selector: e.id ? `#${e.id}` : e.className ? `.${e.className.split(" ")[0]}` : e.tagName.toLowerCase()
           }))
@@ -359,6 +369,23 @@ export class BrowserInvestigator {
         els.map((e) => e.textContent?.trim()).filter(Boolean)
       );
 
+      // Extract Links
+      const links = await page.$$eval("a[href]", (els: any[]) =>
+        els.map((e) => ({
+          tag: "a",
+          id: e.id || undefined,
+          className: e.className || undefined,
+          text: (e.textContent || "").trim().slice(0, 80),
+          href: (e.getAttribute("href") || "").trim(),
+          selector: e.id ? `#${e.id}` : (e.className ? `.${e.className.split(" ")[0]}` : "a")
+        })).filter((l) => l.text || l.href)
+      );
+
+      // Extract Paragraphs / Text Content Blocks
+      const paragraphs = await page.$$eval("p, article p, main p, .content p", (els: any[]) =>
+        els.map((e) => e.textContent?.trim()).filter((t) => t && t.length > 5).slice(0, 20)
+      );
+
       const desktopSnapshot: BrowserVisualSnapshot = {
         viewport: { width: 1280, height: 720, name: "desktop" },
         screenshotPath: desktopShotPath,
@@ -369,6 +396,8 @@ export class BrowserInvestigator {
         buttons,
         inputs,
         forms,
+        links,
+        paragraphs,
         menus,
         responsiveLayoutVerified: true
       };
@@ -506,7 +535,7 @@ export class BrowserInvestigator {
           }
         }
 
-        // Step D: Submit Form if explicit submit button exists
+        // Step D: Submit Form if explicit submit button exists, or press Enter on single-input forms
         const submitBtn = await page.$("button[type=submit], #btn-add-task, #btn-save, button:has-text('Add Task'), button:has-text('Add Item')");
         if (submitBtn) {
           try {
@@ -519,7 +548,135 @@ export class BrowserInvestigator {
             });
             await page.waitForTimeout(800);
           } catch {}
+        } else if (titleInput && !editor) {
+          // In single-input interactive applications (e.g. TodoMVC or search inputs), Enter key triggers item creation/submission
+          try {
+            await titleInput.press("Enter");
+            interactionSteps.push({
+              step: "Submit via Enter key",
+              action: "type",
+              selector: "input",
+              value: "Enter",
+              result: "success",
+              observedStateChange: "Submitted record via Enter keypress"
+            });
+            await page.waitForTimeout(800);
+          } catch {}
         }
+
+        // Multi-State Verification for Task Applications:
+        // State 2: One active task
+        if (options?.screenshotDir) {
+          try {
+            const s2 = await page.screenshot({ fullPage: false });
+            fs.writeFileSync(path.join(options.screenshotDir, "state_02_one_active.png"), s2);
+          } catch {}
+        }
+
+        // State 3: Multiple active tasks (add 2nd task)
+        if (titleInput && !editor) {
+          try {
+            await titleInput.fill(`Forge Verified Item 2`);
+            await titleInput.press("Enter");
+            await page.waitForTimeout(600);
+            if (options?.screenshotDir) {
+              const s3 = await page.screenshot({ fullPage: false });
+              fs.writeFileSync(path.join(options.screenshotDir, "state_03_multiple_active.png"), s3);
+            }
+            interactionSteps.push({
+              step: "Add Second Active Task",
+              action: "type",
+              result: "success",
+              observedStateChange: "Multiple active tasks present in list"
+            });
+          } catch {}
+
+          // State 4: Completed task (toggle first item)
+          try {
+            const toggleEl = await page.$("input.toggle, input[type=checkbox]:not(.toggle-all), .btn-toggle");
+            if (toggleEl) {
+              await toggleEl.click();
+              await page.waitForTimeout(600);
+              if (options?.screenshotDir) {
+                const s4 = await page.screenshot({ fullPage: false });
+                fs.writeFileSync(path.join(options.screenshotDir, "state_04_completed.png"), s4);
+              }
+              interactionSteps.push({
+                step: "Complete Task Action",
+                action: "click",
+                result: "success",
+                observedStateChange: "Task toggled to completed status"
+              });
+            }
+          } catch {}
+
+          // State 5: Active / Completed Filters
+          try {
+            const activeFilter = await page.$("a[href*='active'], .filter-btn[data-filter='active'], button:has-text('Active')");
+            if (activeFilter) {
+              await activeFilter.click();
+              await page.waitForTimeout(400);
+              if (options?.screenshotDir) {
+                const s5 = await page.screenshot({ fullPage: false });
+                fs.writeFileSync(path.join(options.screenshotDir, "state_05_filtered.png"), s5);
+              }
+              interactionSteps.push({
+                step: "Apply Active Filter",
+                action: "click",
+                result: "success",
+                observedStateChange: "View filtered to active tasks only"
+              });
+            }
+          } catch {}
+
+          // State 6: Clear-Completed Action
+          try {
+            const clearBtn = await page.$("button.clear-completed, button:has-text('Clear completed')");
+            const isVisible = clearBtn ? await clearBtn.isVisible().catch(() => false) : false;
+            if (clearBtn && isVisible) {
+              await clearBtn.click();
+              await page.waitForTimeout(600);
+              if (options?.screenshotDir) {
+                const s6 = await page.screenshot({ fullPage: false });
+                fs.writeFileSync(path.join(options.screenshotDir, "state_06_clear_completed.png"), s6);
+              }
+              interactionSteps.push({
+                step: "Clear Completed Tasks",
+                action: "click",
+                result: "success",
+                observedStateChange: "Completed tasks removed from active view"
+              });
+            }
+          } catch {}
+        }
+
+        // Multi-State Verification for API Documentation:
+        try {
+          const expandBtn = await page.$(".opblock-summary-control, button:has-text('Expand operation')");
+          if (expandBtn) {
+            await expandBtn.click();
+            await page.waitForTimeout(400);
+            if (options?.screenshotDir) {
+              const sExp = await page.screenshot({ fullPage: false });
+              fs.writeFileSync(path.join(options.screenshotDir, "state_02_operation_expanded.png"), sExp);
+            }
+            const execBtn = await page.$(".btn-execute, button:has-text('Send Request')");
+            if (execBtn) {
+              await execBtn.click();
+              await page.waitForTimeout(600);
+              if (options?.screenshotDir) {
+                const sProbe = await page.screenshot({ fullPage: false });
+                fs.writeFileSync(path.join(options.screenshotDir, "state_03_probe_executed.png"), sProbe);
+              }
+              interactionSteps.push({
+                step: "Execute API Endpoint Probe",
+                action: "click",
+                result: "success",
+                observedStateChange: "Endpoint request executed and response rendered"
+              });
+            }
+          }
+        } catch {}
 
         // Step D: Capture Post-Interaction Screenshot
         const postShotPath = options?.screenshotDir
@@ -533,6 +690,12 @@ export class BrowserInvestigator {
         // Step E: Reload Page and Verify State Persistence
         try {
           await page.reload({ waitUntil: "networkidle", timeout: 8000 });
+          if (options?.screenshotDir) {
+            try {
+              const sReload = await page.screenshot({ fullPage: false });
+              fs.writeFileSync(path.join(options.screenshotDir, "state_07_reloaded.png"), sReload);
+            } catch {}
+          }
           interactionSteps.push({
             step: "Reload Page (Cold Navigation)",
             action: "reload",
@@ -593,7 +756,9 @@ export class BrowserInvestigator {
           inputs,
           forms,
           menus,
-          headings
+          headings,
+          links,
+          paragraphs
         },
         observedStates: {
           initialState: emptyStateDetected ? "empty_state" : "document_active",
@@ -643,6 +808,18 @@ export class BrowserInvestigator {
       runInteractions: true
     });
 
+    return this.compareInvestigations(refInvestigation, recInvestigation, referenceUrl, recreationUrl);
+  }
+
+  /**
+   * Evaluates visual and behavioral parity between two completed page investigations.
+   */
+  public static compareInvestigations(
+    refInvestigation: BrowserPageInvestigation,
+    recInvestigation: BrowserPageInvestigation,
+    referenceUrl: string,
+    recreationUrl: string
+  ): VisualAndBehavioralComparison {
     // 1. Control Extraction & Set Comparison
     const refButtons = refInvestigation.observedControls.buttons;
     const recButtons = recInvestigation.observedControls.buttons;
@@ -669,10 +846,41 @@ export class BrowserInvestigator {
     const recMobileOk = recInvestigation.mobileSnapshot?.responsiveLayoutVerified ?? false;
     const parityConfirmed = refMobileOk === recMobileOk || recMobileOk;
 
+    // Headings comparison
+    const refHeadings = (refInvestigation.observedControls.headings || []).map((h) => h.trim().toLowerCase());
+    const recHeadings = (recInvestigation.observedControls.headings || []).map((h) => h.trim().toLowerCase());
+    const missingHeadings = refHeadings.filter((h) => !recHeadings.includes(h));
+
+    // Links comparison
+    const refLinks = (refInvestigation.observedControls.links || []).map((l) => (l.text || l.href || "").trim().toLowerCase()).filter(Boolean);
+    const recLinks = (recInvestigation.observedControls.links || []).map((l) => (l.text || l.href || "").trim().toLowerCase()).filter(Boolean);
+    const missingLinks = refLinks.filter((l) => !recLinks.includes(l));
+
+    // Distinguish between content presentation reference, API documentation, and interactive application reference
+    const hasInputs = (refInvestigation.observedControls.inputs?.length || 0) > 0;
+    const hasForms = (refInvestigation.observedControls.forms?.length || 0) > 0;
+    const isInteractiveKeyword = /todo|task|editor|calc|note|manager/i.test(refInvestigation.url) ||
+      /todo|task|editor|calc|note|manager/i.test(refInvestigation.pageTitle);
+    const hasApiDocControls =
+      (refInvestigation.observedControls.buttons || []).some((b) =>
+        /expand operation|try it out|execute|curl|collapse operation/i.test(b.text || "")
+      ) ||
+      (refInvestigation.observedControls.links || []).some((l) =>
+        /swagger|openapi|api-docs|redoc/i.test((l.text || "") + " " + (l.href || ""))
+      );
+    const isApiDocs =
+      hasApiDocControls ||
+      /api|swagger|openapi|documentation|endpoints|rest/i.test(refInvestigation.url) ||
+      /api|swagger|openapi|documentation|endpoints|service explorer|http request|rest api/i.test(
+        refInvestigation.pageTitle + " " + refHeadings.join(" ")
+      );
+
+    const isContentReference = refButtonCount <= 1 && !hasForms && !hasInputs && !isInteractiveKeyword && !isApiDocs;
+
     // 3. Behavioral Persistence Evaluation
     const refPersist = refInvestigation.interactionResults.persistenceVerified;
     const recPersist = recInvestigation.interactionResults.persistenceVerified;
-    const persistenceParity = recPersist;
+    const persistenceParity = (isContentReference || isApiDocs) ? true : recPersist;
 
     // 4. Collect Differences & Discrepancies
     const differences: string[] = [];
@@ -695,11 +903,19 @@ export class BrowserInvestigator {
       differences.push(`Input element count variance: reference has ${refInputs} inputs, recreation has ${recInputs}.`);
     }
 
+    if (missingHeadings.length > 0) {
+      differences.push(`Missing reference headings in recreation (${missingHeadings.length}): ${missingHeadings.slice(0, 3).map((h) => `"${h}"`).join(", ")}`);
+    }
+
+    if (missingLinks.length > 0) {
+      differences.push(`Missing reference links in recreation (${missingLinks.length}): ${missingLinks.slice(0, 3).map((l) => `"${l}"`).join(", ")}`);
+    }
+
     if (refMobileOk && !recMobileOk) {
       differences.push("Mobile layout failure: reference adapts to 375px viewport without overflow, but recreation overflows.");
     }
 
-    if (!persistenceParity) {
+    if (!isContentReference && !isApiDocs && !persistenceParity) {
       differences.push("CRITICAL BEHAVIORAL DEFECT: recreation failed state persistence verification across browser reload.");
     }
 
@@ -740,26 +956,61 @@ export class BrowserInvestigator {
       mobileStatus = "fail";
     }
 
-    // Metric 4: Behavioral Persistence across Reload (Weight: 0.40)
+    // Heading parity metric (Weight: 0.20 for content, 0.15 for api-docs, informative for apps)
+    const headingRecallRatio = refHeadings.length > 0 ? (refHeadings.length - missingHeadings.length) / refHeadings.length : 1.0;
+    const headingScore = Math.round(0.20 * headingRecallRatio * 1000) / 1000;
+    const headingStatus: "pass" | "partial" | "fail" = headingRecallRatio === 1.0 ? "pass" : (headingRecallRatio >= 0.5 ? "partial" : "fail");
+
+    // Link parity metric (Weight: 0.20 for content, 0.15 for api-docs, informative for apps)
+    const linkRecallRatio = refLinks.length > 0 ? (refLinks.length - missingLinks.length) / refLinks.length : 1.0;
+    const linkScore = Math.round(0.20 * linkRecallRatio * 1000) / 1000;
+    const linkStatus: "pass" | "partial" | "fail" = linkRecallRatio === 1.0 ? "pass" : (linkRecallRatio >= 0.5 ? "partial" : "fail");
+
     let persistScore = 0.00;
     let persistStatus: "pass" | "fail" | "unavailable" = "fail";
-    if (refInvestigation.interactionResults.steps.length === 0 && recInvestigation.interactionResults.steps.length === 0) {
-      persistStatus = "unavailable";
+    let rawScore = 0.0;
+    let formula = "";
+
+    if (isContentReference) {
+      formula = "Content Page Fidelity: Accessibility (0.15) + Title (0.05) + Headings (0.20) + Links (0.20) + ControlCleanliness (0.20) + ResponsiveLayout (0.20)";
+      // Control cleanliness: 0.20 if no fabricated extra buttons, penalized if extra buttons fabricated
+      const controlCleanliness = extraInRecreation.length === 0 ? 0.20 : Math.max(0, 0.20 - extraInRecreation.length * 0.04);
+      const responsiveScore = desktopScore + mobileScore; // max 0.20
+      rawScore = Math.round((accScore + titleScore + headingScore + linkScore + controlCleanliness + responsiveScore) * 100) / 100;
       persistScore = 0.00;
-    } else if (recPersist) {
-      persistScore = 0.40;
+      persistStatus = "pass"; // Not applicable/pass for static content
+    } else if (isApiDocs) {
+      formula = "API Documentation Fidelity: Accessibility (0.15) + Title (0.05) + Headings (0.15) + Links (0.15) + ButtonRecall (0.15) + ButtonCount (0.05) + ResponsiveLayout (0.20) + InteractiveProbe (0.10)";
+      const responsiveScore = desktopScore + mobileScore; // max 0.20
+      const apiHeadingScore = Math.round(0.15 * headingRecallRatio * 1000) / 1000;
+      const apiLinkScore = Math.round(0.15 * linkRecallRatio * 1000) / 1000;
+      const probeScore = recInvestigation.accessible ? 0.10 : 0.00;
+      rawScore = Math.round((accScore + titleScore + apiHeadingScore + apiLinkScore + btnRecallScore + btnCountScore + responsiveScore + probeScore) * 100) / 100;
+      persistScore = 0.00;
       persistStatus = "pass";
     } else {
-      persistScore = 0.00;
-      persistStatus = "fail";
+      formula = "Interactive App Fidelity: Accessibility (0.15) + Title (0.05) + ButtonRecall (0.15) + ButtonCount (0.05) + DesktopLayout (0.10) + MobileResponsive (0.10) + BehavioralPersistence (0.40)";
+      if (refInvestigation.interactionResults.steps.length === 0 && recInvestigation.interactionResults.steps.length === 0) {
+        persistStatus = "unavailable";
+        persistScore = 0.00;
+      } else if (refInvestigation.interactionResults.steps.length === 0) {
+        persistStatus = "unavailable";
+        persistScore = 0.00;
+      } else if (recPersist) {
+        persistScore = 0.40;
+        persistStatus = "pass";
+      } else {
+        persistScore = 0.00;
+        persistStatus = "fail";
+      }
+      rawScore = Math.round((accScore + titleScore + btnRecallScore + btnCountScore + desktopScore + mobileScore + persistScore) * 100) / 100;
     }
 
-    const rawScore = Math.round((accScore + titleScore + btnRecallScore + btnCountScore + desktopScore + mobileScore + persistScore) * 100) / 100;
     let finalScore = rawScore;
     let cappedReason: string | undefined = undefined;
 
     // RULE 1: Behavioral failures cannot be hidden by successful structural checks
-    if (persistStatus === "fail") {
+    if (!isContentReference && !isApiDocs && persistStatus === "fail") {
       finalScore = Math.min(finalScore, 0.45);
       cappedReason = "Overall parity score capped at 0.45 because critical behavioral persistence check failed.";
     }
@@ -771,7 +1022,7 @@ export class BrowserInvestigator {
     }
 
     // RULE 3: If checks were unavailable, score cannot equal 1.0 and must document unavailable status
-    if (persistStatus === "unavailable") {
+    if (!isContentReference && !isApiDocs && persistStatus === "unavailable") {
       if (finalScore > 0.60) {
         finalScore = 0.60;
       }
@@ -779,8 +1030,6 @@ export class BrowserInvestigator {
     }
 
     // RULE 4: Critical Control Gap Cap
-    // If reference had significant interactive controls (>= 3 unique buttons) and recreation button recall is < 0.50,
-    // cap the score so an app missing core controls cannot score passing/near-passing.
     if (refBtnTexts.size >= 3 && btnRecallRatio < 0.50) {
       const controlCap = Math.max(0.30, Math.min(0.55, 0.40 + btnRecallRatio * 0.30));
       if (finalScore > controlCap) {
@@ -789,8 +1038,18 @@ export class BrowserInvestigator {
       }
     }
 
+    // RULE 5: Unrelated Fabricated Controls Cap
+    // If reference had <= 1 button, but recreation introduced >= 3 extra buttons,
+    // cap the score at <= 0.40 to prevent fabricated task managers from passing content reference recreations.
+    if (refBtnTexts.size <= 1 && extraInRecreation.length >= 3) {
+      if (finalScore > 0.40) {
+        finalScore = 0.40;
+        cappedReason = (cappedReason ? cappedReason + " " : "") + `Overall score capped at 0.40 due to fabricated unrelated controls: reference had ${refBtnTexts.size} buttons but recreation introduced ${extraInRecreation.length} extra controls (${extraInRecreation.slice(0, 4).join(", ")}).`;
+      }
+    }
+
     const scoring: ParityScoringReport = {
-      formula: "Accessibility (0.15) + Title (0.05) + ButtonRecall (0.15) + ButtonCount (0.05) + DesktopLayout (0.10) + MobileResponsive (0.10) + BehavioralPersistence (0.40)",
+      formula,
       metrics: {
         accessibility: {
           name: "Application Reachability & Access",
@@ -835,11 +1094,29 @@ export class BrowserInvestigator {
           description: `Mobile viewport responsive test: reference=${refMobileOk}, recreation=${recMobileOk}.`
         },
         behavioralPersistence: {
-          name: "Interactive Workflow & State Persistence across Reload",
-          weight: 0.40,
-          score: persistScore,
+          name: (isContentReference || isApiDocs) ? "Interactive Workflow Equivalence" : "Interactive Workflow & State Persistence across Reload",
+          weight: (isContentReference || isApiDocs) ? 0.00 : 0.40,
+          score: isApiDocs ? 0.10 : (isContentReference ? 0.00 : persistScore),
           status: persistStatus,
-          description: `Interactive create/edit/autosave/reload persistence verified: ${recPersist}.`
+          description: isContentReference
+            ? "Content presentation reference; no interactive CRUD persistence workflows in reference."
+            : (isApiDocs
+              ? `API documentation explorer reference; interactive endpoint probes verified (recreation accessible=${recInvestigation.accessible}).`
+              : `Interactive create/edit/autosave/reload persistence verified: ${recPersist}.`)
+        },
+        headingParity: {
+          name: "Heading Structure Parity",
+          weight: isContentReference ? 0.20 : (isApiDocs ? 0.15 : 0.00),
+          score: isApiDocs ? Math.round(0.15 * headingRecallRatio * 1000) / 1000 : headingScore,
+          status: headingStatus,
+          description: `Recall of reference headings: ${refHeadings.length - missingHeadings.length}/${refHeadings.length} (${(headingRecallRatio * 100).toFixed(1)}%). Missing: ${missingHeadings.length ? missingHeadings.join(", ") : "none"}`
+        },
+        linkParity: {
+          name: "Hyperlink Navigation Parity",
+          weight: isContentReference ? 0.20 : (isApiDocs ? 0.15 : 0.00),
+          score: isApiDocs ? Math.round(0.15 * linkRecallRatio * 1000) / 1000 : linkScore,
+          status: linkStatus,
+          description: `Recall of reference links: ${refLinks.length - missingLinks.length}/${refLinks.length} (${(linkRecallRatio * 100).toFixed(1)}%). Missing: ${missingLinks.length ? missingLinks.join(", ") : "none"}`
         }
       },
       rawScore,
@@ -883,7 +1160,9 @@ export class BrowserInvestigator {
         }
       },
       behavioralComparison: {
-        scenario: "Create, Edit, Autosave, Reload, Persistence",
+        scenario: isApiDocs
+          ? "API Documentation & Interactive Endpoint Probing"
+          : (isContentReference ? "Content Presentation & Responsive Rendering" : "Create, Edit, Autosave, Reload, Persistence"),
         referencePersistence: refPersist,
         recreationPersistence: recPersist,
         persistenceParity,

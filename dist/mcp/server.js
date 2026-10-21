@@ -7,9 +7,9 @@ import { ReaInvestigationBridge } from "../investigation/reaBridge.js";
 import { ForgeVerifier } from "../verifier/verifier.js";
 import { checkSystemPrerequisites } from "../utils/prerequisites.js";
 import * as path from "node:path";
-export const FORGE_SERVER_INSTRUCTIONS = "Agent App Forge is an agent-agnostic software recreation and application-generation toolkit. " +
+export const FORGE_SERVER_INSTRUCTIONS = "Agent App Forge is an agent-agnostic software recreation and application-generation toolkit with zero-configuration user experience. " +
     "For an existing application, inspect the authorized reference and use forge_recreate_app to plan, build, and verify an independent implementation. " +
-    "For new applications, use forge_create_spec and forge_generate_app. Use forge_verify_app to test results. " +
+    "For new applications, describe the goal with forge_recreate_app or use forge_create_spec and forge_generate_app. Use forge_verify_app to test results. " +
     "Discover and invoke native REA tools when deeper investigation is required. " +
     "Wasp and other engines remain separately accessible. Report evidence, failures, and unknowns honestly.";
 export function createForgeMcpServer(optionsOrReaPath) {
@@ -89,7 +89,7 @@ export function createForgeMcpServer(optionsOrReaPath) {
                     planOnly: { type: "boolean", description: "Only produce investigation and implementation plan without writing files", default: false },
                     compare: { type: "boolean", description: "Run behavioral comparison against reference after build", default: true }
                 },
-                required: ["prompt", "outputDirectory"]
+                required: ["prompt"]
             }
         },
         {
@@ -315,25 +315,57 @@ export function createForgeMcpServer(optionsOrReaPath) {
                 };
             }
             if (name === "forge_recreate_app") {
-                if (!args || typeof args.prompt !== "string" || !args.prompt.trim() || typeof args.outputDirectory !== "string" || !args.outputDirectory.trim()) {
+                if (!args || typeof args.prompt !== "string" || !args.prompt.trim()) {
                     return {
                         isError: true,
-                        content: [{ type: "text", text: "Invalid arguments: 'prompt' and 'outputDirectory' string parameters are required." }]
+                        content: [{ type: "text", text: "Invalid arguments: 'prompt' non-empty string parameter is required." }]
                     };
                 }
                 const { RecreationOrchestrator } = await import("../recreation/orchestrator.js");
                 const recOrchestrator = new RecreationOrchestrator();
                 const recResult = await recOrchestrator.recreate({
                     prompt: args.prompt.trim(),
-                    targetPath: typeof args.targetPath === "string" ? args.targetPath.trim() : undefined,
-                    outputDirectory: args.outputDirectory.trim(),
+                    targetPath: typeof args.targetPath === "string" && args.targetPath.trim() ? args.targetPath.trim() : undefined,
+                    outputDirectory: typeof args.outputDirectory === "string" && args.outputDirectory.trim() ? args.outputDirectory.trim() : undefined,
                     targetEngine: args.targetEngine,
                     planOnly: Boolean(args.planOnly),
                     compare: args.compare !== false
                 });
+                const report = recResult.finalReport;
+                const formattedReport = report
+                    ? [
+                        `# Agent App Forge — Execution Report`,
+                        `**Status:** ${recResult.success ? "✅ SUCCESS" : "❌ FAILURE"} (${recResult.mode})`,
+                        `**Title:** ${recResult.spec.title}`,
+                        `**Request Type:** ${report.requestClassification.type} | **Domain:** ${report.requestClassification.domain}`,
+                        report.requestClassification.target ? `**Target Reference:** \`${report.requestClassification.target}\`` : "",
+                        `**Output Directory:** \`${report.outputPath}\``,
+                        ``,
+                        `## How to Run`,
+                        `\`\`\`bash`,
+                        `cd "${report.runInstructions.directory}"`,
+                        `${report.runInstructions.command}`,
+                        `\`\`\``,
+                        `Health check: ${report.runInstructions.healthUrl}`,
+                        `Application: ${report.runInstructions.appUrl}`,
+                        ``,
+                        `## Tested Features`,
+                        ...report.testedFeatures.map(f => {
+                            const mark = f.status === "pass" ? "✓" : (f.status === "unavailable" ? "⚠️ [UNAVAILABLE]" : "✗ [FAILED]");
+                            return `- ${mark} **${f.name}**: ${f.details || f.evidence || ""}`;
+                        }),
+                        ``,
+                        report.limitations.length > 0 ? `## Known Limitations\n${report.limitations.map(l => `- ℹ️ ${l}`).join("\n")}\n` : "",
+                        `## Summary`,
+                        recResult.summary
+                    ].filter(Boolean).join("\n")
+                    : recResult.summary;
                 return {
                     isError: !recResult.success,
-                    content: [{ type: "text", text: JSON.stringify(recResult, null, 2) }]
+                    content: [
+                        { type: "text", text: JSON.stringify(recResult, null, 2) },
+                        { type: "text", text: formattedReport }
+                    ]
                 };
             }
             if (name === "forge_rea_tool") {

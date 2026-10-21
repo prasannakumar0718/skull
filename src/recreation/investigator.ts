@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { ReaInvestigationBridge, InvestigationEvidence, ReaStatus } from "../investigation/reaBridge.js";
 import { EntityModel, Operation, AppWorkflow, CoverageAssessment } from "../spec/schema.js";
 import { BrowserInvestigator, BrowserPageInvestigation } from "./browserInvestigator.js";
+import { classifyUserRequest } from "./requestClassifier.js";
 
 function getAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -198,7 +199,15 @@ export class RecreationInvestigator {
       ? (this.bridge as any).probeReaStatus()
       : { cliFound: false, mcpFound: true, details: "MCP active" };
 
-    const { targetType, classification, resolvedPath } = this.classifyTarget(targetPath);
+    let effectiveTarget = targetPath;
+    if (!effectiveTarget || !effectiveTarget.trim()) {
+      const classified = classifyUserRequest(prompt);
+      if (classified.targetPath) {
+        effectiveTarget = classified.targetPath;
+      }
+    }
+
+    const { targetType, classification, resolvedPath } = this.classifyTarget(effectiveTarget);
 
     // Case 1: No target path provided -> Greenfield / Feature-driven
     // Strictly skip unnecessary reference investigation and REA tool calls
@@ -475,11 +484,51 @@ export class RecreationInvestigator {
       }
     }
 
-    // Extract headings
+    // Extract headings (stripping any nested tags)
     const headings: string[] = [];
-    const headingMatches = htmlBody.matchAll(/<h[1-3][^>]*>([^<]+)<\/h[1-3]>/gi);
+    const headingMatches = htmlBody.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi);
     for (const h of headingMatches) {
-      if (h[1]?.trim()) headings.push(h[1].trim());
+      const cleanH = h[1]?.replace(/<[^>]*>/g, "").trim();
+      if (cleanH) headings.push(cleanH);
+    }
+
+    // Extract paragraphs / body text (stripping any nested tags)
+    const paragraphs: string[] = [];
+    const pMatches = htmlBody.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi);
+    for (const pm of pMatches) {
+      const cleanP = pm[1]?.replace(/<[^>]*>/g, "").trim();
+      if (cleanP && cleanP.length > 5) paragraphs.push(cleanP);
+    }
+
+    // Extract static links from HTML markup
+    const links: Array<{ text: string; href: string }> = [];
+    const linkMatches = htmlBody.matchAll(/<a\b[^>]*href=["']?([^"'>\s]+)["']?[^>]*>([\s\S]*?)<\/a>/gi);
+    for (const lm of linkMatches) {
+      const href = lm[1]?.trim();
+      const text = lm[2]?.replace(/<[^>]*>/g, "").trim() || href;
+      if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
+        links.push({ text, href });
+      }
+    }
+
+    const effectiveHeadings = (browserInvestigation?.observedControls.headings && browserInvestigation.observedControls.headings.length > 0)
+      ? browserInvestigation.observedControls.headings
+      : headings;
+
+    const effectiveParagraphs = (browserInvestigation?.observedControls.paragraphs && browserInvestigation.observedControls.paragraphs.length > 0)
+      ? browserInvestigation.observedControls.paragraphs
+      : paragraphs;
+
+    const effectiveLinks = (browserInvestigation?.observedControls.links && browserInvestigation.observedControls.links.length > 0)
+      ? browserInvestigation.observedControls.links.map(l => ({ text: l.text || l.href || "", href: l.href || "" }))
+      : links;
+
+    // Extract static buttons from HTML markup
+    const htmlButtons: string[] = [];
+    const btnMatches = htmlBody.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/gi);
+    for (const bm of btnMatches) {
+      const text = bm[1]?.replace(/<[^>]*>/g, "").trim();
+      if (text) htmlButtons.push(text);
     }
 
     // Extract forms and interactive input controls (order-independent attribute matching)
@@ -599,26 +648,97 @@ export class RecreationInvestigator {
       });
     }
 
-    // Check rich-text / editor cues in body
-    if (/contenteditable|wysiwyg|quill|editor|formatting/i.test(htmlBody)) {
+    // Check rich-text / editor cues in body (look for explicit rich-text editor DOM elements or libraries)
+    if (/(?:contenteditable(?:\s*=\s*["']?true["']?|\b)|wysiwyg|quill\b|ql-editor|editor-canvas|tinymce|ckeditor)/i.test(htmlBody)) {
       observedCapabilities.add("rich-text-editing");
     }
     if (/autosave/i.test(htmlBody)) {
       observedCapabilities.add("autosave");
     }
 
-    // Default entity fallback if web page had no explicit HTML forms
+    // Adaptive entity & workflow inference when no explicit HTML forms were detected
     if (inferredEntities.length === 0) {
-      inferredEntities.push({
-        name: "Item",
-        description: "Default entity synthesized for observed web application",
-        provenance: "inferred",
-        fields: [
-          { name: "id", type: "Int", isId: true, isRequired: true, provenance: "inferred" },
-          { name: "title", type: "String", isId: false, isRequired: true, provenance: "inferred" },
-          { name: "content", type: "String", isId: false, isRequired: false, provenance: "inferred" }
-        ]
-      });
+      const isTaskTarget = /todo|task|job|checklist/i.test(url) ||
+        /todo|task|job|checklist/i.test(pageTitle + " " + effectiveHeadings.join(" "));
+
+      const hasApiDocControls =
+        (browserInvestigation?.observedControls.buttons || []).some(b =>
+          /expand operation|try it out|execute|curl|collapse operation/i.test(b.text || "")
+        ) ||
+        (browserInvestigation?.observedControls.links || []).some(l =>
+          /swagger|openapi|api-docs|redoc/i.test((l.text || "") + " " + (l.href || ""))
+        ) ||
+        /swagger|openapi|api-docs|redoc/i.test(htmlBody);
+
+      const isApiTarget = !isTaskTarget && (
+        discoveredEndpoints.size > 0 ||
+        hasApiDocControls ||
+        /api|swagger|openapi|documentation|endpoints|rest/i.test(url) ||
+        /api|swagger|openapi|documentation|endpoints|service explorer|http request|rest api/i.test(pageTitle + " " + effectiveHeadings.join(" "))
+      );
+
+      const isContentTarget = !isApiTarget && !isTaskTarget && (htmlButtons.length === 0 && (browserInvestigation?.observedControls.buttons.length || 0) <= 1);
+
+      if (isApiTarget) {
+        observedCapabilities.add("api-documentation");
+        inferredEntities.push({
+          name: "ApiEndpoint",
+          description: "API endpoint discovered on service explorer / documentation page",
+          provenance: "observed",
+          fields: [
+            { name: "id", type: "Int", isId: true, isRequired: true, provenance: "inferred" },
+            { name: "path", type: "String", isId: false, isRequired: true, provenance: "observed" },
+            { name: "method", type: "String", isId: false, isRequired: true, provenance: "observed" },
+            { name: "description", type: "String", isId: false, isRequired: false, provenance: "observed" }
+          ]
+        });
+        inferredWorkflows.push({
+          id: "wf_api_explorer",
+          name: "API Documentation & Interactive Endpoint Exploration Workflow",
+          description: `Explore API routes and execute interactive requests discovered at ${url}`,
+          trigger: "User inspects API documentation and triggers endpoint probe",
+          provenance: "observed",
+          steps: [
+            { step: 1, action: "List endpoints", expectedOutcome: "Display HTTP methods and routes", provenance: "observed" },
+            { step: 2, action: "Execute test request", expectedOutcome: "Return JSON response and status code", provenance: "observed" }
+          ],
+          acceptanceCriteria: ["Endpoints render with method badges", "Interactive probe returns valid status code"]
+        });
+      } else if (isContentTarget) {
+        observedCapabilities.add("content-presentation");
+        inferredEntities.push({
+          name: "ContentPage",
+          description: "Content page observed with structured headings, text, and hyperlinks",
+          provenance: "observed",
+          fields: [
+            { name: "id", type: "Int", isId: true, isRequired: true, provenance: "inferred" },
+            { name: "title", type: "String", isId: false, isRequired: true, provenance: "observed" },
+            { name: "content", type: "String", isId: false, isRequired: false, provenance: "observed" }
+          ]
+        });
+        inferredWorkflows.push({
+          id: "wf_content_view",
+          name: "Content Presentation & Hyperlink Navigation Workflow",
+          description: `Render structured content hierarchy discovered at ${url}`,
+          trigger: "User opens content page",
+          provenance: "observed",
+          steps: [
+            { step: 1, action: "Load content view", expectedOutcome: "Render typography, headings, paragraphs, and navigation links", provenance: "observed" }
+          ],
+          acceptanceCriteria: ["Headings and text render accurately", "Navigation links are clickable and valid"]
+        });
+      } else {
+        inferredEntities.push({
+          name: "Item",
+          description: "Default entity synthesized for observed web application",
+          provenance: "inferred",
+          fields: [
+            { name: "id", type: "Int", isId: true, isRequired: true, provenance: "inferred" },
+            { name: "title", type: "String", isId: false, isRequired: true, provenance: "inferred" },
+            { name: "content", type: "String", isId: false, isRequired: false, provenance: "inferred" }
+          ]
+        });
+      }
     }
 
     // Default navigation workflow
@@ -639,7 +759,10 @@ export class RecreationInvestigator {
       kind: "routes",
       findings: {
         pageTitle,
-        headings,
+        headings: effectiveHeadings,
+        paragraphs: effectiveParagraphs,
+        links: effectiveLinks,
+        buttons: htmlButtons,
         formsDetected: formIndex,
         apiEndpoints: Array.from(discoveredEndpoints),
         hasResponsiveLayout: observedCapabilities.has("responsive-layout")
@@ -1505,6 +1628,9 @@ export class RecreationInvestigator {
 
     if (/document|editor|word|writer|rich[- ]?text/i.test(prompt)) {
       observedCapabilities.push("rich-text-editing", "autosave", "document-management");
+    }
+    if (/student|school|attendance|academic/i.test(prompt)) {
+      observedCapabilities.push("student-enrollment", "attendance-tracking", "fee-management", "student-directory", "analytics-reporting");
     }
     if (/export|download/i.test(prompt)) {
       observedCapabilities.push("document-export");

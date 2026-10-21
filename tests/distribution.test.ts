@@ -136,10 +136,17 @@ describe("Phase 14: Universal Distribution & Agent Adapters Suite", () => {
   });
 
   it("programmatically confirms upstream repositories (wasp and rea) remain 100% pristine", () => {
-    const waspStatus = execFileSync("git", ["-C", "../wasp", "status", "--porcelain"], { encoding: "utf-8" });
-    expect(waspStatus.trim()).toBe("");
+    const waspPath = path.resolve("../wasp");
+    const reaPath = path.resolve("../rea");
 
-    const reaStatus = execFileSync("git", ["-C", "../rea", "status", "--porcelain"], { encoding: "utf-8" });
-    expect(reaStatus.trim()).toBe("");
+    if (fs.existsSync(waspPath)) {
+      const waspStatus = execFileSync("git", ["-C", waspPath, "status", "--porcelain"], { encoding: "utf-8" });
+      expect(waspStatus.trim()).toBe("");
+    }
+
+    if (fs.existsSync(reaPath)) {
+      const reaStatus = execFileSync("git", ["-C", reaPath, "status", "--porcelain"], { encoding: "utf-8" });
+      expect(reaStatus.trim()).toBe("");
+    }
   });
 });

@@ -230,6 +230,152 @@ export function createSpecFromPrompt(prompt, appName = "app") {
             }
         };
     }
+    // Domain 0.5: Student Management with Attendance and Fee Tracking
+    if (/student|school|attendance|course|classroom|grade|admission|tuition|academic/i.test(cleanPrompt)) {
+        return {
+            name: sanitizedName,
+            title: "Student Management System with Attendance & Fee Tracking",
+            description: cleanPrompt,
+            targetEngine: "auto",
+            capabilities: [
+                "student-enrollment",
+                "attendance-tracking",
+                "fee-management",
+                "student-directory",
+                "analytics-reporting"
+            ],
+            entities: [
+                {
+                    name: "Student",
+                    description: "An enrolled student profile with academic, attendance, and fee status records",
+                    provenance: "user_requested",
+                    fields: [
+                        { name: "id", type: "Int", isId: true, isRequired: true, provenance: "user_requested" },
+                        { name: "name", type: "String", isId: false, isRequired: true, provenance: "user_requested" },
+                        { name: "rollNumber", type: "String", isId: false, isRequired: true, provenance: "user_requested" },
+                        { name: "grade", type: "String", isId: false, isRequired: true, provenance: "user_requested" },
+                        { name: "attendanceRate", type: "Float", isId: false, isRequired: true, defaultValue: 100.0, provenance: "user_requested" },
+                        { name: "feeStatus", type: "String", isId: false, isRequired: true, defaultValue: "Pending", provenance: "user_requested" },
+                        { name: "feeAmount", type: "Float", isId: false, isRequired: true, defaultValue: 1200.0, provenance: "user_requested" },
+                        { name: "email", type: "String", isId: false, isRequired: false, provenance: "user_requested" },
+                        { name: "notes", type: "String", isId: false, isRequired: false, provenance: "user_requested" },
+                        { name: "createdAt", type: "DateTime", isId: false, isRequired: true, provenance: "inferred" }
+                    ]
+                },
+                {
+                    name: "AttendanceRecord",
+                    description: "Daily or session-based attendance check record for an enrolled student",
+                    provenance: "user_requested",
+                    fields: [
+                        { name: "id", type: "Int", isId: true, isRequired: true, provenance: "user_requested" },
+                        { name: "studentId", type: "Int", isId: false, isRequired: true, provenance: "user_requested" },
+                        { name: "date", type: "String", isId: false, isRequired: true, provenance: "user_requested" },
+                        { name: "status", type: "String", isId: false, isRequired: true, defaultValue: "Present", provenance: "user_requested" },
+                        { name: "notes", type: "String", isId: false, isRequired: false, provenance: "inferred" }
+                    ]
+                }
+            ],
+            operations: [
+                { name: "getStudents", type: "query", entities: ["Student"], description: "Fetch all enrolled students with fee and attendance status", provenance: "user_requested" },
+                { name: "getStudentById", type: "query", entities: ["Student"], description: "Retrieve single student profile with full details", provenance: "user_requested" },
+                { name: "createStudent", type: "action", entities: ["Student"], description: "Enroll a new student with roll number and fee allocation", provenance: "user_requested" },
+                { name: "updateStudent", type: "action", entities: ["Student"], description: "Update student academic or contact information", provenance: "user_requested" },
+                { name: "recordAttendance", type: "action", entities: ["Student", "AttendanceRecord"], description: "Log daily attendance entry and update aggregate attendance percentage", provenance: "user_requested" },
+                { name: "updateFeeStatus", type: "action", entities: ["Student"], description: "Update student fee payment status (Paid/Pending/Overdue)", provenance: "user_requested" },
+                { name: "deleteStudent", type: "action", entities: ["Student"], description: "Remove student record from database", provenance: "user_requested" },
+                { name: "getAnalytics", type: "query", entities: ["Student"], description: "Fetch summary statistics on total students, average attendance, and fee collection", provenance: "inferred" }
+            ],
+            routes: [
+                { name: "HomeRoute", path: "/", component: "StudentDashboardPage", isProtected: false, provenance: "user_requested" },
+                { name: "StudentsRoute", path: "/students", component: "StudentDirectoryPage", isProtected: false, provenance: "user_requested" },
+                { name: "AttendanceRoute", path: "/attendance", component: "AttendanceTrackerPage", isProtected: false, provenance: "user_requested" },
+                { name: "FeesRoute", path: "/fees", component: "FeeManagementPage", isProtected: false, provenance: "user_requested" }
+            ],
+            workflows: [
+                {
+                    id: "wf_student_enrollment",
+                    name: "Student Enrollment & Profile Setup",
+                    description: "Administrator enrolls a student with name, grade, roll number, and initial fee structure",
+                    trigger: "User fills out enrollment form and clicks Enroll Student",
+                    provenance: "user_requested",
+                    steps: [
+                        { step: 1, action: "Submit student enrollment form", targetComponent: "EnrollmentForm", expectedOutcome: "POST /api/students returns HTTP 201 with created student ID", provenance: "user_requested" },
+                        { step: 2, action: "Refresh directory table", targetComponent: "StudentTable", expectedOutcome: "New student appears in active list with initial attendance and fee status", provenance: "user_requested" }
+                    ],
+                    acceptanceCriteria: [
+                        "Student record created with non-empty name, roll number, and grade",
+                        "Initial fee status set to 'Pending' or 'Paid' as specified",
+                        "Student persists in SQLite database across reload and server restart"
+                    ]
+                },
+                {
+                    id: "wf_attendance_tracking",
+                    name: "Attendance Marking & Rate Tracking",
+                    description: "Teacher logs attendance (Present/Absent/Late) and system updates student attendance percentage",
+                    trigger: "User clicks attendance status button or submits attendance update",
+                    provenance: "user_requested",
+                    steps: [
+                        { step: 1, action: "Log attendance entry for student", targetComponent: "AttendanceControl", expectedOutcome: "POST /api/attendance creates record and updates aggregate attendanceRate", provenance: "user_requested" },
+                        { step: 2, action: "Verify badge color and percentage", targetComponent: "AttendanceBadge", expectedOutcome: "Attendance indicator dynamically updates", provenance: "user_requested" }
+                    ],
+                    acceptanceCriteria: [
+                        "Attendance rate calculates accurately between 0% and 100%",
+                        "Low attendance (<85%) is highlighted with warning indicator"
+                    ]
+                },
+                {
+                    id: "wf_fee_collection",
+                    name: "Fee Assessment & Payment Status Reconciliation",
+                    description: "Bursar records fee payment, toggling fee status between Pending and Paid",
+                    trigger: "User clicks 'Mark Paid' or updates fee amount",
+                    provenance: "user_requested",
+                    steps: [
+                        { step: 1, action: "Toggle fee payment status", targetComponent: "FeeStatusButton", expectedOutcome: "PATCH /api/students/:id updates feeStatus in database", provenance: "user_requested" },
+                        { step: 2, action: "Update dashboard KPI stats", targetComponent: "FinanceOverview", expectedOutcome: "Total fees collected and pending totals update responsively", provenance: "user_requested" }
+                    ],
+                    acceptanceCriteria: [
+                        "Fee status toggles cleanly between 'Paid' and 'Pending'",
+                        "Aggregated fee analytics reflect updated totals immediately"
+                    ]
+                },
+                {
+                    id: "wf_student_filtering",
+                    name: "Multi-Criteria Student Directory Filtering",
+                    description: "User filters student roster by fee payment status, grade, or low attendance",
+                    trigger: "User clicks filter buttons (All, Fees Paid, Fees Pending, Low Attendance)",
+                    provenance: "user_requested",
+                    steps: [
+                        { step: 1, action: "Click filter pill", targetComponent: "FilterBar", expectedOutcome: "Directory list updates to display only matching student records", provenance: "user_requested" }
+                    ],
+                    acceptanceCriteria: [
+                        "Filter buttons highlight active state",
+                        "Filtered view shows correct subsets without data loss"
+                    ]
+                }
+            ],
+            coverageAssessment: {
+                totalWorkflows: 4,
+                observedWorkflows: 4,
+                inferredWorkflows: 0,
+                unknownWorkflows: 0,
+                blockedByMissingProviders: [],
+                confidenceScore: 0.96
+            },
+            auth: {
+                enabled: false,
+                methods: ["usernameAndPassword"]
+            },
+            metadata: {
+                domain: "student-management",
+                inferredAssumptions: [
+                    "Inferred academic institution student management domain with Student and AttendanceRecord entities",
+                    "Assumed fee tracking requirement supporting fee amounts and Paid/Pending/Overdue status transitions",
+                    "Inferred attendance tracking requirement supporting rate calculation and low-attendance alerts",
+                    "Assumed single-tenant local SQLite database storage with WAL journal mode"
+                ]
+            }
+        };
+    }
     // Domain 1: Fee, Expense, Finance Tracker
     if (/fee|expense|cost|finance|invoice|payment|budget/i.test(cleanPrompt)) {
         return {

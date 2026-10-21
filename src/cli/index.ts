@@ -123,7 +123,9 @@ export function createCli(): Command {
       console.log(`Mode: [${result.mode}]`);
       console.log(`Summary: ${result.summary}`);
       console.log(`Title: ${result.spec.title}`);
+      console.log(`Output Directory: ${result.outputDirectory}`);
       console.log(`Engine: ${result.plan.selectedEngine} (${result.plan.engineRationale})`);
+      console.log(`Run Command: node server.js (inside ${result.outputDirectory})`);
       console.log(`Observed Capabilities: ${result.investigation.observedCapabilities.join(", ") || "None (feature-driven)"}`);
 
       if (result.investigation.unknowns.length > 0) {

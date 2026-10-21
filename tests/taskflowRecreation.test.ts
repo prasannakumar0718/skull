@@ -24,6 +24,17 @@ describe("Task 3: Second Authorized Target (TaskFlow) Browser Investigation & Pa
 
   it("Executes live browser comparison between TaskFlow reference and recreation", async () => {
     expect(fs.existsSync(refDir)).toBe(true);
+
+    if (!fs.existsSync(recDir)) {
+      const { createSpecFromPrompt } = await import("../src/spec/validator.js");
+      const { EngineOrchestrator } = await import("../src/engines/orchestrator.js");
+      const spec = createSpecFromPrompt("TaskFlow — Project & Task Management", "browser-taskflow-recreation");
+      spec.title = "TaskFlow — Project & Task Management";
+      spec.targetEngine = "fullstack-node";
+      const orchestrator = new EngineOrchestrator();
+      await orchestrator.generateProject(spec, recDir);
+    }
+
     expect(fs.existsSync(recDir)).toBe(true);
 
     const refPort = await getAvailablePort();

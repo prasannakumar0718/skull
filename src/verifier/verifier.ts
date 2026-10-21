@@ -224,12 +224,16 @@ export class ForgeVerifier {
             db.exec("PRAGMA journal_mode = WAL;");
 
             let isDocEditor = false;
-            let title = "Document";
+            let isStudentMgmt = false;
+            let isContent = false;
+            let isApiDocs = false;
+            let title = "Application";
 
             const specPath = path.join(resolvedDir, "forgespec.json");
             if (fs.existsSync(specPath)) {
               try {
                 const parsed = JSON.parse(fs.readFileSync(specPath, "utf-8"));
+                title = parsed.title || title;
                 if (
                   parsed.metadata?.domain === "document-editor" ||
                   parsed.domain === "document-editor" ||
@@ -237,7 +241,30 @@ export class ForgeVerifier {
                   parsed.models?.some((m: any) => String(m.name).toLowerCase().includes("document"))
                 ) {
                   isDocEditor = true;
-                  title = parsed.title || title;
+                } else if (
+                  parsed.metadata?.domain === "student-management" ||
+                  parsed.domain === "student-management" ||
+                  parsed.entities?.some((e: any) => String(e.name).toLowerCase().includes("student")) ||
+                  /student|attendance/i.test(parsed.description || "")
+                ) {
+                  isStudentMgmt = true;
+                } else if (
+                  parsed.metadata?.domain === "api-docs" ||
+                  parsed.domain === "api-docs" ||
+                  parsed.entities?.some((e: any) => String(e.name).toLowerCase().includes("apiendpoint")) ||
+                  parsed.capabilities?.includes("api-documentation") ||
+                  /api documentation|service explorer|rest api|openapi|swagger/i.test(parsed.title || "") ||
+                  /api documentation|service explorer|rest api|openapi|swagger/i.test(parsed.description || "")
+                ) {
+                  isApiDocs = true;
+                } else if (
+                  parsed.metadata?.domain === "content" ||
+                  parsed.domain === "content" ||
+                  parsed.entities?.some((e: any) => String(e.name).toLowerCase() === "contentpage") ||
+                  parsed.capabilities?.includes("content-presentation") ||
+                  /example domain|informational website|content presentation/i.test(parsed.title || "")
+                ) {
+                  isContent = true;
                 }
               } catch {
                 // Ignore parse errors
@@ -245,10 +272,16 @@ export class ForgeVerifier {
             }
 
             const serverPath = path.join(resolvedDir, "server.js");
-            if (!isDocEditor && fs.existsSync(serverPath)) {
+            if (!isDocEditor && !isStudentMgmt && !isApiDocs && !isContent && fs.existsSync(serverPath)) {
               const serverCode = fs.readFileSync(serverPath, "utf-8");
               if (serverCode.includes("documents (") || serverCode.includes("CREATE TABLE IF NOT EXISTS documents")) {
                 isDocEditor = true;
+              } else if (serverCode.includes("students (") || serverCode.includes("CREATE TABLE IF NOT EXISTS students")) {
+                isStudentMgmt = true;
+              } else if (serverCode.includes("content_pages (") || serverCode.includes("CREATE TABLE IF NOT EXISTS content_pages")) {
+                isContent = true;
+              } else if (serverCode.includes("endpoint_metrics (") || serverCode.includes("CREATE TABLE IF NOT EXISTS endpoint_metrics")) {
+                isApiDocs = true;
               }
             }
 
@@ -283,6 +316,74 @@ export class ForgeVerifier {
                 seed.run(`Welcome to ${title}`, "<p>Welcome to Document Studio.</p>", now, now);
               }
               repairedIssues.push("Initialized SQLite database schema in app.db (documents & revisions)");
+            } else if (isStudentMgmt) {
+              db.exec(`
+                CREATE TABLE IF NOT EXISTS students (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL,
+                  roll_number TEXT NOT NULL,
+                  grade TEXT NOT NULL,
+                  attendance_rate REAL DEFAULT 100.0,
+                  fee_status TEXT DEFAULT 'Pending',
+                  fee_amount REAL DEFAULT 1200.0,
+                  email TEXT DEFAULT '',
+                  notes TEXT DEFAULT '',
+                  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS attendance_records (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  student_id INTEGER NOT NULL,
+                  date TEXT NOT NULL,
+                  status TEXT NOT NULL DEFAULT 'Present',
+                  notes TEXT DEFAULT ''
+                );
+              `);
+
+              const countRow = db.prepare("SELECT COUNT(*) AS count FROM students").get() as { count: number };
+              if (countRow.count === 0) {
+                const seed = db.prepare(`
+                  INSERT INTO students (name, roll_number, grade, attendance_rate, fee_status, fee_amount, email, notes, created_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                `);
+                seed.run("Alex Chen", "STU-1001", "Grade 10", 96.5, "Paid", 1500.0, "alex.chen@school.edu", "Academic honors list.");
+                seed.run("Maria Garcia", "STU-1002", "Grade 11", 82.0, "Pending", 1500.0, "maria.g@school.edu", "Attendance improvement plan active.");
+                seed.run("Liam Patel", "STU-1003", "Grade 10", 91.0, "Paid", 1500.0, "liam.p@school.edu", "Standard tuition paid.");
+              }
+              repairedIssues.push("Initialized SQLite database schema in app.db (students & attendance_records)");
+            } else if (isContent) {
+              db.exec(`
+                CREATE TABLE IF NOT EXISTS content_pages (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  title TEXT NOT NULL,
+                  slug TEXT DEFAULT '/',
+                  content TEXT DEFAULT '',
+                  headings TEXT DEFAULT '[]',
+                  links TEXT DEFAULT '[]',
+                  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+              `);
+              const countRow = db.prepare("SELECT COUNT(*) AS count FROM content_pages").get() as { count: number };
+              if (countRow.count === 0) {
+                const seed = db.prepare(`
+                  INSERT INTO content_pages (title, slug, content, headings, links, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                `);
+                seed.run(title, "/", "Content presentation service initialized.", "[]", "[]");
+              }
+              repairedIssues.push("Initialized SQLite database schema in app.db (content_pages)");
+            } else if (isApiDocs) {
+              db.exec(`
+                CREATE TABLE IF NOT EXISTS endpoint_metrics (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  path TEXT NOT NULL,
+                  method TEXT NOT NULL,
+                  calls_count INTEGER DEFAULT 0,
+                  last_called_at TEXT,
+                  last_status INTEGER
+                );
+              `);
+              repairedIssues.push("Initialized SQLite database schema in app.db (endpoint_metrics)");
             } else {
               db.exec(`
                 CREATE TABLE IF NOT EXISTS tasks (
@@ -366,7 +467,7 @@ export class ForgeVerifier {
     };
 
     // Wait for server to boot with bounded polling
-    const maxAttempts = 20;
+    const maxAttempts = 35;
     const delay = 150;
 
     for (let i = 0; i < maxAttempts; i++) {

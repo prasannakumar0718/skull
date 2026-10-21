@@ -1,6 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { generateStudentManagementApp } from "./studentManagementTemplate.js";
+import { generateContentApp } from "./contentPageTemplate.js";
+import { generateApiDocsApp } from "./apiDocsTemplate.js";
+function escapeHtmlText(str) {
+    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 export class UniversalNodeEngine {
     name = "fullstack-node";
     canHandle(_spec) {
@@ -8,11 +14,33 @@ export class UniversalNodeEngine {
     }
     async generate(spec, _targetDirectory) {
         const isDocumentEditor = spec.metadata?.domain === "document-editor" ||
-            spec.entities.some((e) => e.name.toLowerCase().includes("document")) ||
-            (spec.capabilities && spec.capabilities.includes("rich-text-editing"));
+            spec.entities.some((e) => e.name.toLowerCase().includes("document"));
+        const isStudentManagement = spec.metadata?.domain === "student-management" ||
+            spec.entities.some((e) => e.name.toLowerCase().includes("student")) ||
+            /student|attendance/i.test(spec.description || "") ||
+            /student|attendance/i.test(spec.title || "");
+        const isApiDocs = spec.metadata?.domain === "api-docs" ||
+            spec.entities.some((e) => e.name.toLowerCase().includes("apiendpoint")) ||
+            spec.capabilities?.includes("api-documentation") ||
+            /api documentation|service explorer|rest api|openapi|swagger/i.test(spec.description || "") ||
+            /api documentation|service explorer|rest api|openapi|swagger/i.test(spec.title || "");
+        const isContent = spec.metadata?.domain === "content" ||
+            spec.entities.some((e) => e.name.toLowerCase() === "contentpage") ||
+            spec.capabilities?.includes("content-presentation") ||
+            /example domain|informational website|content presentation/i.test(spec.title || "") ||
+            /content presentation/i.test(spec.description || "");
         let result;
         if (isDocumentEditor) {
             result = this.generateDocumentEditorApp(spec);
+        }
+        else if (isStudentManagement) {
+            result = generateStudentManagementApp(spec);
+        }
+        else if (isApiDocs) {
+            result = generateApiDocsApp(spec);
+        }
+        else if (isContent) {
+            result = generateContentApp(spec);
         }
         else {
             result = this.generateStandardApp(spec);
@@ -43,6 +71,76 @@ export class UniversalNodeEngine {
               contentSnapshot TEXT NOT NULL,
               summary TEXT,
               savedAt TEXT NOT NULL
+            );
+          `);
+                }
+                else if (isStudentManagement) {
+                    db.exec(`
+            CREATE TABLE IF NOT EXISTS students (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              roll_number TEXT NOT NULL,
+              grade TEXT NOT NULL,
+              attendance_rate REAL DEFAULT 100.0,
+              fee_status TEXT DEFAULT 'Pending',
+              fee_amount REAL DEFAULT 1200.0,
+              email TEXT DEFAULT '',
+              notes TEXT DEFAULT '',
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS attendance_records (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              student_id INTEGER NOT NULL,
+              date TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'Present',
+              notes TEXT DEFAULT ''
+            );
+          `);
+                    const countRow = db.prepare("SELECT COUNT(*) AS count FROM students").get();
+                    if (Number(countRow.count) === 0) {
+                        const insertStmt = db.prepare(`
+              INSERT INTO students (name, roll_number, grade, attendance_rate, fee_status, fee_amount, email, notes, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            `);
+                        insertStmt.run("Alex Chen", "STU-1001", "Grade 10", 96.5, "Paid", 1500.0, "alex.chen@school.edu", "Academic honors list.");
+                        insertStmt.run("Maria Garcia", "STU-1002", "Grade 11", 82.0, "Pending", 1500.0, "maria.g@school.edu", "Attendance improvement plan active.");
+                        insertStmt.run("Liam Patel", "STU-1003", "Grade 10", 91.0, "Paid", 1500.0, "liam.p@school.edu", "Standard tuition paid.");
+                    }
+                }
+                else if (isContent) {
+                    db.exec(`
+            CREATE TABLE IF NOT EXISTS content_pages (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL,
+              slug TEXT DEFAULT '/',
+              content TEXT DEFAULT '',
+              headings TEXT DEFAULT '[]',
+              links TEXT DEFAULT '[]',
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+                    const countRow = db.prepare("SELECT COUNT(*) AS count FROM content_pages").get();
+                    if (Number(countRow.count) === 0) {
+                        const headingsJson = JSON.stringify(spec.metadata?.observedHeadings || [spec.title]);
+                        const linksJson = JSON.stringify(spec.metadata?.observedLinks || []);
+                        const paragraphsText = (spec.metadata?.observedParagraphs || []).join("\n\n");
+                        const insertStmt = db.prepare(`
+              INSERT INTO content_pages (title, slug, content, headings, links, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            `);
+                        insertStmt.run(spec.title, "/", paragraphsText, headingsJson, linksJson);
+                    }
+                }
+                else if (isApiDocs) {
+                    db.exec(`
+            CREATE TABLE IF NOT EXISTS endpoint_metrics (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              path TEXT NOT NULL,
+              method TEXT NOT NULL,
+              calls_count INTEGER DEFAULT 0,
+              last_called_at TEXT,
+              last_status INTEGER
             );
           `);
                 }
@@ -415,6 +513,11 @@ server.listen(PORT, () => {
             content: serverJs
         });
         // 3. public/index.html (Rich Text Studio Canvas)
+        const observedButtons = Array.isArray(spec.metadata?.observedButtons)
+            ? spec.metadata.observedButtons.filter(b => typeof b === "string" && b.trim())
+            : [];
+        const standardDocButtons = ["new document", "export", "b", "i", "u", "s", "h1", "h2", "¶", "list", "quote"];
+        const extraObservedButtons = observedButtons.filter(b => !standardDocButtons.some(sd => b.toLowerCase().includes(sd)));
         const indexHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -431,6 +534,10 @@ server.listen(PORT, () => {
       <span id="word-count" class="badge badge-words">0 words</span>
     </div>
     <div class="header-right">
+      ${extraObservedButtons.length > 0 ? `
+      <div class="header-observed-controls">
+        ${extraObservedButtons.map((btn, idx) => `<button type="button" id="btn-observed-${idx}" class="btn btn-observed">${escapeHtmlText(btn)}</button>`).join("\n        ")}
+      </div>` : ""}
       <button id="btn-new" class="btn btn-secondary">+ New Document</button>
       <div class="dropdown">
         <button id="btn-export" class="btn btn-primary">Export &#9662;</button>
@@ -491,6 +598,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helve
 .badge-saving { background: #fef08a; color: #713f12; }
 .badge-words { background: #e5e7eb; color: #4b5563; }
 .header-right { display: flex; align-items: center; gap: 10px; }
+.header-observed-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-observed { background: #f3f4f6; border: 1px solid #d1d5db; color: #374151; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.15s; }
+.btn-observed:hover { background: #e5e7eb; }
 .btn { padding: 8px 14px; border-radius: 6px; font-size: 0.875rem; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; }
 .btn-primary { background: #2563eb; color: #ffffff; }
 .btn-primary:hover { background: #1d4ed8; }
@@ -942,9 +1052,12 @@ db.exec(\`
   );
 \`);
 
-// Seed default tasks if empty
+// Seed default tasks if empty, unless reference was observed in empty state (e.g. minimalist todo reference)
+const shouldSeed = ${JSON.stringify(spec.metadata?.seedTasks === true ||
+            (Array.isArray(spec.metadata?.observedButtons) && spec.metadata.observedButtons.some((b) => /add task/i.test(b))) ||
+            (!spec.metadata?.observedButtons && !spec.metadata?.domain))};
 const countRow = db.prepare("SELECT COUNT(*) AS count FROM tasks").get();
-if (Number(countRow.count) === 0) {
+if (shouldSeed && Number(countRow.count) === 0) {
   const insertStmt = db.prepare(\`
     INSERT INTO tasks (title, category, priority, completed, notes, created_at)
     VALUES (?, ?, ?, ?, ?, datetime('now'))
@@ -1134,6 +1247,16 @@ export const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Clear completed tasks: POST /api/tasks/clear-completed or DELETE /api/tasks/completed
+  if ((method === "POST" && pathname === "/api/tasks/clear-completed") || (method === "DELETE" && pathname === "/api/tasks/completed")) {
+    try {
+      db.prepare("DELETE FROM tasks WHERE completed = 1").run();
+      return sendJson(200, { success: true });
+    } catch (err) {
+      return sendJson(500, { error: err.message });
+    }
+  }
+
   // Static File Serving
   let filePath = pathname === "/" ? "/index.html" : pathname;
   const safePath = path.normalize(filePath).replace(/^(\\.\\.[\\/\\\\])+/, "");
@@ -1164,21 +1287,93 @@ if (isMain) {
         // 3. public/index.html (Faithful structure with stats, multi-attribute form, filter controls, and list)
         const brandTitle = spec.title.includes("—") ? spec.title.split("—")[0].trim() : spec.title;
         const brandSubtitle = spec.title.includes("—") ? spec.title.split("—")[1].trim() : spec.description;
-        const indexHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${spec.title}</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
+        const observedButtons = Array.isArray(spec.metadata?.observedButtons)
+            ? spec.metadata.observedButtons.filter(b => typeof b === "string" && b.trim())
+            : [];
+        const hasAddTask = observedButtons.some(b => /add task/i.test(b));
+        const hasClearCompleted = observedButtons.some(b => /clear completed/i.test(b));
+        const isMinimalistTaskApp = (!hasAddTask && (hasClearCompleted || observedButtons.length <= 1)) ||
+            Boolean(spec.capabilities?.includes("minimalist-task-ui")) ||
+            spec.metadata?.layout === "minimalist" ||
+            spec.metadata?.style === "minimalist";
+        const rawHeadings = Array.isArray(spec.metadata?.observedHeadings) && spec.metadata.observedHeadings.length > 0
+            ? spec.metadata.observedHeadings
+            : [];
+        const rawLinks = Array.isArray(spec.metadata?.observedLinks) && spec.metadata.observedLinks.length > 0
+            ? spec.metadata.observedLinks
+            : [];
+        const taskHeading = rawHeadings.find(h => /todo|task|list|checklist/i.test(h)) ||
+            (spec.title && !/recreation|reference|interactive|application/i.test(spec.title)
+                ? (spec.title.includes("—") ? spec.title.split("—")[0].trim() : spec.title)
+                : "todos");
+        const observedTodoMvcLink = rawLinks.find(l => /todomvc/i.test((l.text || "") + " " + (l.href || "")));
+        const userRequestedTodoMvc = /todomvc/i.test(spec.description || "") || /todomvc/i.test(spec.title || "");
+        const includeTodoMvcLink = Boolean(observedTodoMvcLink || userRequestedTodoMvc);
+        const todoMvcHref = observedTodoMvcLink?.href || "https://todomvc.com";
+        const todoMvcText = observedTodoMvcLink?.text || "TodoMVC";
+        const todoMvcFooterHtml = includeTodoMvcLink
+            ? `<p>Part of <a href="${escapeHtmlText(todoMvcHref)}" target="_blank" rel="noopener">${escapeHtmlText(todoMvcText)}</a></p>`
+            : "";
+        const extraFooterLinksHtml = rawLinks
+            .filter(l => !/todomvc/i.test((l.text || "") + " " + (l.href || "")) && l.href && !l.href.startsWith("#"))
+            .map(l => `<p><a href="${escapeHtmlText(l.href)}" target="_blank" rel="noopener">${escapeHtmlText(l.text || l.href)}</a></p>`)
+            .join("\n      ");
+        const standardTaskButtons = ["add task", "all tasks", "active", "completed", "high priority", "complete", "delete", "reopen"];
+        const extraObservedButtons = observedButtons.filter(b => !standardTaskButtons.some(st => b.toLowerCase().includes(st)));
+        let mainContentHtml = "";
+        if (isMinimalistTaskApp) {
+            mainContentHtml = `
+  <div class="todomvc-wrapper">
+    <aside class="learn">
+      ${rawHeadings.filter(h => !/todos/i.test(h)).map(h => `<h3 class="learn-heading">${escapeHtmlText(h)}</h3>`).join("\n      ")}
+      ${rawLinks.length > 0 ? `
+      <div class="source-links">
+        ${rawLinks.map(l => `<a href="${escapeHtmlText(l.href)}" target="_blank" rel="noopener">${escapeHtmlText(l.text || l.href)}</a>`).join("\n        ")}
+      </div>` : ""}
+    </aside>
+
+    <section class="todoapp">
+      <header class="header">
+        <h1>${escapeHtmlText(taskHeading)}</h1>
+        <input class="new-todo" id="task-title" name="title" placeholder="What needs to be done?" autofocus>
+      </header>
+
+      <section class="main" id="main-section">
+        <input id="toggle-all" class="toggle-all" type="checkbox">
+        <label for="toggle-all">Mark all as complete</label>
+        <ul class="todo-list" id="task-list"></ul>
+      </section>
+
+      <footer class="footer" id="footer-section">
+        <span class="todo-count" id="stat-active"><strong>0</strong> items left</span>
+        <ul class="filters">
+          <li><a href="#/" class="filter-btn selected active" data-filter="all">All</a></li>
+          <li><a href="#/active" class="filter-btn" data-filter="active">Active</a></li>
+          <li><a href="#/completed" class="filter-btn" data-filter="completed">Completed</a></li>
+        </ul>
+        <button type="button" class="clear-completed" id="btn-clear-completed" onclick="clearCompleted()">Clear completed</button>
+      </footer>
+    </section>
+
+    <footer class="info">
+      <p>Double-click to edit a task</p>
+      <p>Generated by <a href="#/">Agent App Forge</a></p>
+      ${todoMvcFooterHtml ? `${todoMvcFooterHtml}\n      ` : ""}${extraFooterLinksHtml}
+    </footer>
+  </div>`;
+        }
+        else {
+            mainContentHtml = `
   <div class="app-container">
     <header class="app-header">
       <div class="brand">
         <h1>${brandTitle}</h1>
         <span class="subtitle">${brandSubtitle}</span>
       </div>
+      ${extraObservedButtons.length > 0 ? `
+      <div class="header-observed-controls">
+        ${extraObservedButtons.map((btn, idx) => `<button type="button" id="btn-observed-${idx}" class="btn btn-observed">${escapeHtmlText(btn)}</button>`).join("\n        ")}
+      </div>` : ""}
       <div class="header-stats">
         <span id="stat-total" class="stat-badge">Total: 0</span>
         <span id="stat-active" class="stat-badge stat-active">Active: 0</span>
@@ -1240,8 +1435,18 @@ if (isMain) {
         </div>
       </section>
     </main>
-  </div>
-
+  </div>`;
+        }
+        const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${spec.title}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+${mainContentHtml}
   <script src="app.js"></script>
 </body>
 </html>
@@ -1293,6 +1498,30 @@ body {
 .subtitle {
   font-size: 0.85rem;
   color: #64748b;
+}
+
+.header-observed-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn-observed {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-observed:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
 }
 
 .header-stats {
@@ -1561,6 +1790,124 @@ textarea:focus {
 .btn-delete:hover {
   background: #fecaca;
 }
+
+/* Minimalist Task Application Styles */
+.todomvc-wrapper {
+  max-width: 550px;
+  margin: 0 auto;
+  padding: 10px;
+}
+.learn {
+  margin-bottom: 20px;
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.learn-heading {
+  font-size: 1.1rem;
+  color: #334155;
+  margin-bottom: 8px;
+}
+.source-links a {
+  display: inline-block;
+  margin-right: 12px;
+  margin-bottom: 6px;
+  color: #2563eb;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.source-links a:hover {
+  text-decoration: underline;
+}
+.todoapp {
+  background: #fff;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2), 0 25px 50px 0 rgba(0, 0, 0, 0.1);
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.todoapp h1 {
+  font-size: 60px;
+  font-weight: 200;
+  text-align: center;
+  color: #b83f45;
+  margin: 0;
+  padding: 16px 0 8px;
+}
+.new-todo {
+  padding: 16px 16px 16px 60px;
+  border: none;
+  background: rgba(0, 0, 0, 0.003);
+  box-shadow: inset 0 -2px 1px rgba(0,0,0,0.03);
+  width: 100%;
+  font-size: 20px;
+  box-sizing: border-box;
+}
+.new-todo:focus {
+  outline: none;
+}
+.todo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.toggle-all {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  right: 100%;
+  bottom: 100%;
+}
+.footer {
+  padding: 10px 15px;
+  height: 40px;
+  font-size: 14px;
+  border-top: 1px solid #e6e6e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #777;
+}
+.filters {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  gap: 8px;
+}
+.filters a {
+  color: inherit;
+  margin: 3px;
+  padding: 3px 7px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+.filters a.selected {
+  border-color: #ce4646;
+}
+.clear-completed {
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+}
+.clear-completed:hover {
+  text-decoration: underline;
+}
+.info {
+  margin: 40px auto 0;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
+.info a {
+  color: inherit;
+  text-decoration: none;
+}
 `;
         files.push({
             relativePath: "public/style.css",
@@ -1572,16 +1919,26 @@ let currentFilter = "all";
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("create-task-form");
+  const titleInput = document.getElementById("task-title");
   const filterButtons = document.querySelectorAll(".filter-btn");
 
   if (form) {
     form.addEventListener("submit", handleCreateTask);
   }
 
+  if (titleInput && !form) {
+    titleInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleCreateTask(e);
+      }
+    });
+  }
+
   filterButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      filterButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
+      filterButtons.forEach((b) => b.classList.remove("active", "selected"));
+      btn.classList.add("active", "selected");
       currentFilter = btn.dataset.filter || "all";
       renderTasks();
     });
@@ -1683,12 +2040,54 @@ function renderTasks() {
   if (!container) return;
   container.innerHTML = "";
 
+  const isMinimalist = Boolean(document.querySelector(".todoapp"));
+
   const filtered = allTasks.filter((task) => {
     if (currentFilter === "active") return !task.completed;
     if (currentFilter === "completed") return Boolean(task.completed);
     if (currentFilter === "high") return task.priority === "high";
     return true;
   });
+
+  if (isMinimalist) {
+    if (filtered.length === 0) {
+      container.innerHTML = "";
+    } else {
+      filtered.forEach((task) => {
+        const li = document.createElement("li");
+        li.className = \`todo-item \${task.completed ? "completed" : ""}\`;
+        li.dataset.id = task.id;
+        li.innerHTML = \`
+          <div class="view" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #ededed;">
+            <div style="display: flex; align-items: center; gap: 14px; flex: 1;">
+              <input class="toggle" type="checkbox" \${task.completed ? "checked" : ""} onchange="toggleTask(\${task.id}, \${Boolean(task.completed)})" style="width: 22px; height: 22px; cursor: pointer;">
+              <label style="font-size: 1.15rem; \${task.completed ? "text-decoration: line-through; color: #94a3b8;" : "color: #334155;"}">\${escapeHtml(task.title)}</label>
+            </div>
+            <button type="button" class="destroy btn-delete" onclick="deleteTask(\${task.id})" aria-label="Delete" style="background: none; border: none; font-size: 1.25rem; color: #ef4444; cursor: pointer; padding: 4px 8px;">×</button>
+          </div>
+        \`;
+        container.appendChild(li);
+      });
+    }
+
+    const statActive = document.getElementById("stat-active");
+    if (statActive) {
+      const activeCount = allTasks.filter((t) => !t.completed).length;
+      statActive.innerHTML = \`<strong>\${activeCount}</strong> item\${activeCount === 1 ? "" : "s"} left\`;
+    }
+
+    const clearBtn = document.getElementById("btn-clear-completed");
+    if (clearBtn) {
+      const completedCount = allTasks.filter((t) => t.completed).length;
+      clearBtn.style.display = completedCount > 0 ? "inline-block" : "none";
+    }
+
+    const mainSec = document.getElementById("main-section");
+    const footerSec = document.getElementById("footer-section");
+    if (mainSec) mainSec.style.display = allTasks.length > 0 ? "block" : "none";
+    if (footerSec) footerSec.style.display = allTasks.length > 0 ? "flex" : "none";
+    return;
+  }
 
   if (filtered.length === 0) {
     container.innerHTML = \`<div class="empty-state" style="padding: 32px; text-align: center; color: #94a3b8; background: #fff; border-radius: 8px;">No tasks found.</div>\`;
@@ -1722,6 +2121,20 @@ function renderTasks() {
     container.appendChild(card);
   });
 }
+
+async function clearCompleted() {
+  try {
+    const res = await fetch("/api/tasks/clear-completed", { method: "POST" });
+    if (res.ok) {
+      allTasks = allTasks.filter((t) => !t.completed);
+      renderTasks();
+      updateStats();
+    }
+  } catch (err) {
+    console.error("Failed to clear completed:", err);
+  }
+}
+window.clearCompleted = clearCompleted;
 
 function updateStats() {
   const total = allTasks.length;
@@ -1788,12 +2201,15 @@ for (const req of requiredCols) {
   }
 }
 
-// 4. Verify Read Capabilities
-const rows = db.prepare("SELECT COUNT(*) AS total FROM tasks").get();
-if (Number(rows.total) < 1) {
-  console.error("FAIL: tasks table is empty, expected seed data!");
+// 4. Verify Read & Write Capabilities
+const insertTest = db.prepare("INSERT INTO tasks (title, category, priority, completed, notes) VALUES ('Verification Task', 'QA', 'low', 0, 'Test')").run();
+const insertedId = Number(insertTest.lastInsertRowid);
+const verifiedRow = db.prepare("SELECT * FROM tasks WHERE id = ?").get(insertedId);
+if (!verifiedRow || verifiedRow.title !== 'Verification Task') {
+  console.error("FAIL: Failed to insert or verify test task row!");
   process.exit(1);
 }
+db.prepare("DELETE FROM tasks WHERE id = ?").run(insertedId);
 
 // 5. Verify Write, Toggle, and Delete Capabilities
 const insert = db.prepare(\`

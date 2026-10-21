@@ -15,9 +15,9 @@ describe("REA Investigation Bridge Integrity Suite", () => {
     expect(typeof status.mcpFound).toBe("boolean");
     expect(status.details).toBeTruthy();
 
-    // Since node_modules in ../rea is not installed, mcpFound must be false
+    // Since node_modules in ../rea is not installed (or not checked out in CI), mcpFound must be false
     expect(status.mcpFound).toBe(false);
-    expect(status.details).toContain("node_modules");
+    expect(status.details).toMatch(/node_modules|not installed|no built REA|does not contain/i);
   });
 
   it("accurately classifies native source parsing as forge-source-parser", async () => {

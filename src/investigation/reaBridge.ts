@@ -623,6 +623,22 @@ export class ReaInvestigationBridge {
         } else {
           errMsg = `Tool '${toolName}' execution returned error status.`;
         }
+
+        // If upstream REA lacks native limits capability on this Node runtime, fall back to native node:sqlite
+        if (
+          toolName === "inspect_sqlite_database" &&
+          toolArgs.path &&
+          errMsg &&
+          (errMsg.includes("capability_unavailable") || errMsg.includes("DatabaseSync.limits") || errMsg.includes("Node.js 24.15"))
+        ) {
+          const fallback = await this.executeNativeSqliteFallback(String(toolArgs.path));
+          if (fallback) {
+            return {
+              isError: false,
+              data: fallback
+            };
+          }
+        }
       }
       return {
         isError: isErr,
@@ -637,11 +653,86 @@ export class ReaInvestigationBridge {
           error: "Operation cancelled by client signal during execution."
         };
       }
+
+      // If execution threw due to connection close or missing REA runtime on inspect_sqlite_database, attempt fallback
+      if (toolName === "inspect_sqlite_database" && toolArgs.path) {
+        const fallback = await this.executeNativeSqliteFallback(String(toolArgs.path));
+        if (fallback) {
+          return {
+            isError: false,
+            data: fallback
+          };
+        }
+      }
+
       return {
         isError: true,
         error: err.message || `Failed to execute native REA tool '${toolName}'`,
         remediation: "Verify that target path exists, arguments match schema, and required analysis providers are installed."
       };
+    }
+  }
+
+  /**
+   * Native node:sqlite fallback inspection when upstream REA capability is unavailable on older Node versions.
+   */
+  private async executeNativeSqliteFallback(rawPath: string): Promise<any | null> {
+    try {
+      const resolved = path.resolve(rawPath);
+      if (!fs.existsSync(resolved)) return null;
+
+      const { DatabaseSync } = await import("node:sqlite");
+      const db = new DatabaseSync(resolved);
+      try {
+        const tables = db.prepare("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as any[];
+        const schemaTables = [];
+        for (const tbl of tables) {
+          const cols = db.prepare(`PRAGMA table_info("${tbl.name}")`).all() as any[];
+          schemaTables.push({
+            name: tbl.name,
+            sql: tbl.sql,
+            columns: cols.map((c: any) => ({
+              name: c.name,
+              declared_type: c.type,
+              not_null: Boolean(c.notnull),
+              primary_key_position: c.pk
+            }))
+          });
+        }
+
+        const textSummary = `SQLite Database Inspection (via native node:sqlite fallback):\n` +
+          `Database: ${path.basename(resolved)}\n` +
+          `Tables (${schemaTables.length}): ${schemaTables.map((t: any) => t.name).join(", ")}\n` +
+          `Schema:\n` + schemaTables.map((t: any) => `  Table ${t.name}: ${t.columns.map((c: any) => `${c.name} ${c.declared_type}`).join(", ")}`).join("\n");
+
+        return {
+          _meta: {
+            provenance: {
+              source: "native_node_sqlite_fallback",
+              tool: "inspect_sqlite_database"
+            }
+          },
+          content: [
+            {
+              type: "text",
+              text: textSummary
+            }
+          ],
+          structuredContent: {
+            evidence_id: `ev_sqlite_${Date.now()}`,
+            normalized_result: {
+              observed: true,
+              schema: {
+                tables: schemaTables
+              }
+            }
+          }
+        };
+      } finally {
+        db.close();
+      }
+    } catch {
+      return null;
     }
   }
 

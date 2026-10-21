@@ -50,6 +50,7 @@ describe("End-to-End MVP Verification: Persistent Task Manager Lifecycle", () =>
       // Step 1: Create specification
       const prompt = "Build a task manager with persistent storage";
       const spec = createSpecFromPrompt(prompt, "task-manager-mvp");
+      spec.targetEngine = "fullstack-node";
       const { result: valResult } = validateForgeSpec(spec);
       expect(valResult.valid).toBe(true);
 
